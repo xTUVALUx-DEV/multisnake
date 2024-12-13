@@ -1,6 +1,6 @@
 use std::{cmp::{max, min}, collections::HashMap};
 use macroquad::prelude::*;
-use super::{object::Tile, snake::{self, Direction, Snake, SnakeController}};
+use super::{object::Tile, snake::{self, Direction, Snake, SnakeController, SnakeData, SnakeRefData}};
 use ::rand::{thread_rng, Rng};
 
 
@@ -11,6 +11,7 @@ const GRID_OFFSET_X: f32 = 10.;
 const GRID_OFFSET_Y: f32 = 10.;
 
 
+const snake_colors: [Color; 4] = [BLUE, YELLOW, GREEN, ORANGE];
 
 pub(crate) struct SnakeGrid<'a> {
     width: i32,
@@ -28,13 +29,11 @@ impl<'a> SnakeGrid<'a> {
     }
 
     pub fn draw(&self) {
-        clear_background(BLACK);
 
         for (i, object) in self.grid.iter().enumerate() {
             let x = i as i32 % self.width;
             let y = i  as i32 / self.width;
 
-            let snake_colors = [BLUE, YELLOW, GREEN, ORANGE];
 
             let color = match object {
                 &Tile::Snake {id} => snake_colors[id as usize],
@@ -46,10 +45,15 @@ impl<'a> SnakeGrid<'a> {
             
             draw_rectangle(x as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_X, y as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_Y, SQUARE_SIZE, SQUARE_SIZE, color);
         }
+
+        let (x_offset, y_offset) = (self.width as f32*(SQUARE_SIZE+SQUARE_SPACING) + 30., 20.);
+        for (i, snake) in self.snakes.iter().enumerate() {
+            draw_text(&snake.get_name(), x_offset, y_offset + i as f32*30., 30.0, snake_colors[snake.get_id() as usize]);
+        }
     }
 
-    pub fn add_snake(&mut self, controler: &'a mut dyn SnakeController) {
-        let new_snake = Snake::new(self.snakes.len() as i32, controler);
+    pub fn add_snake(&mut self, controller: &'a mut dyn SnakeController) {
+        let new_snake = Snake::new(self.snakes.len() as i32, controller);
         self.snakes.push(new_snake);
     }
 
@@ -75,8 +79,8 @@ impl<'a> SnakeGrid<'a> {
         let mut rng = thread_rng();
         for i in 0..20 {
             let x = rng.gen_range(0..grid.len());
-            if let Tile::EMPTY = grid[i] {
-                grid[i] = Tile::FOOD;
+            if let Tile::EMPTY = grid[x] {
+                grid[x] = Tile::FOOD;
                 return;
             }
         }
@@ -101,13 +105,9 @@ impl<'a> SnakeGrid<'a> {
                 Direction::RIGHT => x += 1,
                 _ => {}
             };
-
-            println!("Moving to {} {}", x, y);
-            println!("{:?}", self.grid);
             
             // Check Borders
             if x < 0 || x >= self.width || y < 0 || y >= self.height {
-                println!("Snake died (Todo)");
                 SnakeGrid::kill_snake(&mut self.grid, snake);
                 continue;
             }
@@ -116,7 +116,10 @@ impl<'a> SnakeGrid<'a> {
             match &self.grid[new_head as usize] {
                 Tile::EMPTY => {},
                 Tile::FOOD => { snake.grow(); SnakeGrid::place_food(&mut self.grid); },
-                _ => SnakeGrid::kill_snake(&mut self.grid, snake)
+                _ => {
+                    SnakeGrid::kill_snake(&mut self.grid, snake);
+                    return;
+                }
             }
 
             // Move logic
@@ -147,6 +150,32 @@ impl<'a> SnakeGrid<'a> {
         for snake in &mut self.snakes {
             snake.update_controller();
         }
+    }
+    pub fn send_gamestate(&self) {
+        for snake in &self.snakes {
+            snake.send_gamestate(SnakeData {
+                grid: &self.grid,
+                height: self.height as u16,
+                width: self.width as u16,
+                snakes: self.snakes.iter().map(|x| x.get_data()).collect(),
+            });
+        }
+    }
+
+    pub fn check_end(&self) -> Result<SnakeRefData, i32> {
+        // Success: Last snake, Error: 0 = No snakes left, 1 = Game still ongoing
+        let mut alive_snake = Err(0);
+        for snake in &self.snakes {
+            if !snake.is_dead() {
+                if let Err(0) = alive_snake {
+                    alive_snake = Ok(snake.get_data());
+                } else {
+                    return Err(1);
+                }
+            }
+        }
+        alive_snake
+        
     }
 
 }

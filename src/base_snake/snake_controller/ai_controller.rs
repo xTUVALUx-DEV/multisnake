@@ -1,41 +1,151 @@
+use std::ptr;
+use std::thread::sleep;
+use std::time::Duration;
+
 use macroquad::{input::KeyCode};
 use macroquad::prelude::is_key_pressed;
-use crate::base_snake::snake::{Direction, SnakeController};
+use windows::core::{PCSTR, PWSTR};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
+use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
+use windows::Win32::System::IO::{GetOverlappedResult, OVERLAPPED};
+use crate::base_snake::snake::{Direction, SnakeController, SnakeData};
 
 #[derive(Debug)]
 pub struct PipeController {
-    pipe: HANDLE,
-    direction: Direction
+    pipe: Option<HANDLE>,
+    pipe_name: PCSTR,
+    direction: Direction,
+    ai_name: String
+
 
 }
 impl PipeController {
-    pub fn new(pipe: HANDLE) -> Self {
-        Self { direction: Direction::RIGHT, pipe }
+    pub fn new(pipe_name: PCSTR) -> Self {
+        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string() }
     }
 
+    fn is_connected(&self) -> bool {
+        self.pipe.is_some()
+    }
 }
 
 impl SnakeController for PipeController {
+    fn clone_weak(&self) -> Box<(dyn SnakeController)> {
+        Box::new(PipeController { pipe: None, pipe_name: self.pipe_name, direction: self.direction, ai_name: self.ai_name.clone() })
+    }
+
     fn next_direction(&self) -> Direction {
         self.direction
     }
+    
     fn update(&mut self) {
-        let mut buffer = [0u8; 1024];
+        if !self.is_connected() {
+            return;
+        }
 
-        // Read the message from the client
-        let bytes_read = unsafe {
-            let mut read_bytes = 0;
-            ReadFile(pipe, buffer.as_mut_ptr() as *mut _, buffer.len() as u32, &mut read_bytes, std::ptr::null_mut());
-            read_bytes
+        let mut available_bytes = 0;
+        let peek_result = unsafe {
+            PeekNamedPipe(
+                self.pipe.unwrap(),
+                None,
+                0,
+                None,
+                Some(&mut available_bytes),
+                None,
+            )
+        };
+        
+        if peek_result.is_err() || available_bytes <= 0 {
+            return;
+        }
+
+        let mut buffer = vec![0u8; available_bytes as usize];
+        let mut bytes_read = 0;
+
+        // Read the available data from the pipe
+        let _ = unsafe {
+            ReadFile(self.pipe.unwrap(), Some(&mut buffer), Some(&mut bytes_read), None)
         };
 
-        let message = String::from_utf8_lossy(&buffer[..bytes_read as usize]);
-
-        println!("Recieved: {}", message);
+        match buffer.last().unwrap() {
+            10 => self.direction = Direction::UP,
+            11 => self.direction = Direction::DOWN,
+            12 => self.direction = Direction::LEFT,
+            13 => self.direction = Direction::RIGHT,
+                _ => println!("Invalid Message"),    
+        }
 
     }
-    fn report_data(&self, data: &crate::base_snake::snake::SnakeData) {
+    fn report_data(&self, data: SnakeData) {
+        if !self.is_connected() {
+            return;
+        }
+
+        let buffer = data.encode().to_vec();
         
+        let result = unsafe {
+            WriteFile(self.pipe.unwrap(), Some(&buffer), Some(&mut (buffer.len() as u32)), None)
+        };
+        if result.is_err() {
+            println!("Pipe write failed");
+        }
+
+    }
+    fn connect(&mut self) -> bool {
+        unsafe {
+            let pipe = CreateNamedPipeA(
+                self.pipe_name,
+                PIPE_ACCESS_DUPLEX,
+                PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                PIPE_UNLIMITED_INSTANCES,
+                2044,
+                2044,
+                0,
+                Some(ptr::null_mut()),
+            ).unwrap_or_else(|e| {
+                panic!("CreateNamedPipeA Failed With Error: {e}");
+            });
+
+            println!("Waiting for connection {:?}", self.pipe_name.to_string());
+            if ConnectNamedPipe(pipe, None).is_err() {
+                return false;
+            }
+            self.pipe = Some(pipe);
+        }
+        let mut available_bytes = 0;
+
+        sleep(Duration::from_secs(1));
+        let peek_result = unsafe {
+           
+            PeekNamedPipe(
+                self.pipe.unwrap(),
+                None,
+                0,
+                None,
+                Some(&mut available_bytes),
+                None,
+            )
+        };
+        
+
+        // Read Name
+        let mut buffer = [0u8; 216];
+        let mut bytes_read = buffer.len() as u32;
+
+        unsafe {
+            let _ = ReadFile(self.pipe.unwrap(), Some(&mut buffer), Some(&mut bytes_read), None);
+        };
+        self.ai_name = String::from_utf8_lossy(&buffer[..bytes_read as usize]).to_string();
+ 
+        true
+       
+    }
+    fn disconnect(&self) {
+        unsafe { CloseHandle(self.pipe.unwrap()) };
+    }
+    fn get_name(&self) -> String {
+        self.ai_name.clone()
     }
 }
 

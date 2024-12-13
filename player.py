@@ -27,8 +27,10 @@ class SnakePlayer:
         print("Connected to named pipe.")
         try:
             # Send a message to the Rust program
-            message = "Hello from Python"
-            win32file.WriteFile(pipe, message.encode())
+            while True:
+                message = "Hello from Python"
+                win32file.WriteFile(pipe, message.encode())
+                time.sleep(1)
 
             # Receive a response
             response = win32file.ReadFile(pipe, 64 * 1024)

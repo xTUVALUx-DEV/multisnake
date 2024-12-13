@@ -31,7 +31,13 @@ impl SnakeController for KeyboardController {
         if is_key_pressed(KeyCode::Right) {
             self.direction = Direction::RIGHT;
         }
-        println!("Direction: {:?}", self.direction);
+    }
+    fn get_name(&self) -> String {
+        "Keyboard-Input".to_string()
+    }
+
+    fn clone_weak(&self) -> Box<(dyn SnakeController)> {
+        Box::new(KeyboardController::new())
     }
 }
 

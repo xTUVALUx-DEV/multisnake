@@ -197,7 +197,6 @@ version = "0.1.0"
 dependencies = [
  "macroquad",
  "rand",
- "winapi",
  "windows",
 ]
 
