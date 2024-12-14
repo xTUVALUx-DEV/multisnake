@@ -1,5 +1,3 @@
-use std::{panic, sync::{Arc, Mutex}, thread};
-
 use macroquad::prelude::*;
 use windows::core::{s, PCSTR};
 
@@ -22,7 +20,7 @@ pub async fn connection_screen(players: &mut Vec<Box<dyn SnakeController>>) {
     next_frame().await;
 
     let mut connected_players: Vec<String> = Vec::new();
-    for (i, player) in players.iter_mut().enumerate(){ 
+    for (_, player) in players.iter_mut().enumerate(){ 
         if player.connect() {
             connected_players.push(player.get_name());
             draw_player_names(&connected_players);
@@ -42,11 +40,19 @@ pub async  fn add_players() -> Vec<Box<dyn SnakeController>> {
     let mut snake_controllers: Vec<Box<dyn SnakeController>> = Vec::new(); 
     let mut current_pipe_index = 0;
 
-    let pipe_names: [PCSTR; 4] = [
+    const pipe_names: [PCSTR; 12] = [
         s!(r"\\.\pipe\SnakePipe1"),
         s!(r"\\.\pipe\SnakePipe2"),
         s!(r"\\.\pipe\SnakePipe3"),
         s!(r"\\.\pipe\SnakePipe4"),
+        s!(r"\\.\pipe\SnakePipe5"),
+        s!(r"\\.\pipe\SnakePipe6"),
+        s!(r"\\.\pipe\SnakePipe7"),
+        s!(r"\\.\pipe\SnakePipe8"),
+        s!(r"\\.\pipe\SnakePipe9"),
+        s!(r"\\.\pipe\SnakePipe10"),
+        s!(r"\\.\pipe\SnakePipe11"),
+        s!(r"\\.\pipe\SnakePipe12"),
     ];
 
 

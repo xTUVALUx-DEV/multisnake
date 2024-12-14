@@ -1,14 +1,10 @@
 use std::ptr;
-use std::thread::sleep;
-use std::time::Duration;
 
-use macroquad::{input::KeyCode};
-use macroquad::prelude::is_key_pressed;
-use windows::core::{PCSTR, PWSTR};
+use windows::core::PCSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
 use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
-use windows::Win32::System::IO::{GetOverlappedResult, OVERLAPPED};
+use windows::Win32::System::IO::OVERLAPPED;
 use crate::base_snake::snake::{Direction, SnakeController, SnakeData};
 
 #[derive(Debug)]
@@ -55,19 +51,17 @@ impl SnakeController for PipeController {
                 None,
             )
         };
-        
         if peek_result.is_err() || available_bytes <= 0 {
             return;
         }
 
         let mut buffer = vec![0u8; available_bytes as usize];
         let mut bytes_read = 0;
-
         // Read the available data from the pipe
         let _ = unsafe {
             ReadFile(self.pipe.unwrap(), Some(&mut buffer), Some(&mut bytes_read), None)
         };
-
+        
         match buffer.last().unwrap() {
             10 => self.direction = Direction::UP,
             11 => self.direction = Direction::DOWN,
@@ -77,26 +71,24 @@ impl SnakeController for PipeController {
         }
 
     }
-    fn report_data(&self, data: SnakeData) {
+    fn report_data(&self, data: SnakeData, snake_id: i32) {
         if !self.is_connected() {
             return;
         }
 
-        let buffer = data.encode().to_vec();
+        let buffer = data.encode(snake_id).to_vec();
         
-        let result = unsafe {
-            WriteFile(self.pipe.unwrap(), Some(&buffer), Some(&mut (buffer.len() as u32)), None)
+        unsafe {
+            let mut overlapped = OVERLAPPED::default();
+            let _ = WriteFile(self.pipe.unwrap(), Some(&buffer), Some(&mut (buffer.len() as u32)), Some(&mut overlapped));
         };
-        if result.is_err() {
-            println!("Pipe write failed");
-        }
 
     }
     fn connect(&mut self) -> bool {
         unsafe {
             let pipe = CreateNamedPipeA(
                 self.pipe_name,
-                PIPE_ACCESS_DUPLEX,
+                PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                 PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
                 PIPE_UNLIMITED_INSTANCES,
                 2044,
@@ -113,21 +105,6 @@ impl SnakeController for PipeController {
             }
             self.pipe = Some(pipe);
         }
-        let mut available_bytes = 0;
-
-        sleep(Duration::from_secs(1));
-        let peek_result = unsafe {
-           
-            PeekNamedPipe(
-                self.pipe.unwrap(),
-                None,
-                0,
-                None,
-                Some(&mut available_bytes),
-                None,
-            )
-        };
-        
 
         // Read Name
         let mut buffer = [0u8; 216];
@@ -142,7 +119,11 @@ impl SnakeController for PipeController {
        
     }
     fn disconnect(&self) {
-        unsafe { CloseHandle(self.pipe.unwrap()) };
+        if !self.is_connected() {
+            return;
+        } 
+
+        unsafe { let _ = CloseHandle(self.pipe.unwrap()); };
     }
     fn get_name(&self) -> String {
         self.ai_name.clone()

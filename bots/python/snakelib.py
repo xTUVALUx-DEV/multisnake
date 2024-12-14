@@ -47,18 +47,21 @@ class GameGrid:
         return self.data
 
 class Snake:
-    def __init__(self, id, name, state):
+    def __init__(self, id, name, state, head):
         self.id = id
         self.name = name
         self.state = SnakeState(state)
+        self.head = head
     
     def __repr__(self):
         return f"<Snake name={self.name} id={self.id} state={self.state}>"
 
 class SnakeData:
-    def __init__(self, buffer, own_name):
+    def __init__(self, buffer):
         self.height = struct.unpack('H', buffer[:2])[0]
         self.width = struct.unpack('H', buffer[2:4])[0]
+        my_snake_id = struct.unpack('H', buffer[4:6])[0] + 10
+
         self.raw_grid: list[list[int]] = []
         self.snakes: dict[int, Snake] = {}
         self.me: Snake = None
@@ -66,11 +69,11 @@ class SnakeData:
         for x in range(self.width):
             inner = []
             for y in range(self.height):
-                index = 4+(x+y*self.width)*2
+                index = 6+(x+y*self.width)*2
                 inner.append(struct.unpack('h', buffer[index:index+2])[0])
             self.raw_grid.append(inner)
         
-        start_snakes = 4+(self.height*self.width)*2
+        start_snakes = 6+(self.height*self.width)*2
         num_snakes = struct.unpack('H', buffer[start_snakes:start_snakes+2])[0]
         
         curr = start_snakes + 2
@@ -81,14 +84,17 @@ class SnakeData:
             curr += 2
             name = buffer[curr:curr+len_name].decode()
             curr += len_name
+            print(buffer[curr:])
+            head_x, head_y = struct.unpack('II', buffer[curr:curr+8])
+            curr += 8
             alive = buffer[curr]
             curr += 1
-
-            snake = Snake(snake_id, name, alive)
+            snake = Snake(snake_id, name, alive, (head_x, head_y))
             self.snakes[snake_id] = snake
-            if name == own_name:
+            print(snake_id, my_snake_id)
+            if snake_id == my_snake_id:
                 self.me = snake
-
+        
         self.grid: GameGrid = GameGrid(self.raw_grid, self.height, self.width)
 
 class BaseSnakeAi:
@@ -128,8 +134,13 @@ class BaseSnakeAi:
                 raise GameEnd
             
             if response[0] == 0:
-                direction: Direction = self.update(SnakeData(response[1], self.name))
-                win32file.WriteFile(pipe, struct.pack("B", direction.value))
+                direction: Direction = self.update(SnakeData(response[1]))
+                try:
+                    win32file.WriteFile(pipe, struct.pack("B", direction.value))
+                except Exception as e:
+                    print(e)
+                    raise GameEnd
+
 
     def update(self, data: SnakeData) -> Direction:
         raise NotImplementedError("Du musst die update methode überschreiben")
