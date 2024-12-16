@@ -12,13 +12,12 @@ pub struct PipeController {
     pipe: Option<HANDLE>,
     pipe_name: PCSTR,
     direction: Direction,
-    ai_name: String
-
-
+    ai_name: String,
+    missed_inputs: i32
 }
 impl PipeController {
     pub fn new(pipe_name: PCSTR) -> Self {
-        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string() }
+        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0 }
     }
 
     fn is_connected(&self) -> bool {
@@ -40,6 +39,7 @@ impl SnakeController for PipeController {
             return;
         }
 
+
         let mut available_bytes = 0;
         let peek_result = unsafe {
             PeekNamedPipe(
@@ -52,6 +52,7 @@ impl SnakeController for PipeController {
             )
         };
         if peek_result.is_err() || available_bytes <= 0 {
+            missed_inputs += 1;
             return;
         }
 
@@ -141,6 +142,12 @@ impl SnakeController for PipeController {
     }
     fn get_name(&self) -> String {
         self.ai_name.clone()
+    }
+    fn get_info(&self) -> PlayerInfo {
+        PlayerInfo {
+            vec![],
+            vec![]
+        }
     }
 }
 

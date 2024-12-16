@@ -4,6 +4,10 @@ use macroquad::color::Color;
 
 use super::object::Tile;
 
+pub struct PlayerInfo  {
+    pub marked_cells: Vec<i32>,
+    pub info_lines: Vec<String>
+}
 
 pub struct SnakeData<'a> {
     pub height: u16,
@@ -182,4 +186,5 @@ pub trait SnakeController : Debug {
     fn update(&mut self) {}
     fn next_direction(&self) -> Direction;
     fn clone_weak(&self) -> Box<dyn SnakeController>;
+    fn get_info(&self) -> Option<PlayerInfo> { None } 
 }

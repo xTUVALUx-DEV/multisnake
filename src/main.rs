@@ -36,7 +36,6 @@ async fn main() {
         loop {
             clear_background(RED);
 
-            draw_text("Hello, Macroquad!", 20.0, 20.0, 30.0, DARKGRAY);
             game_grid.update_input();
             game_grid.tick();
 
@@ -68,7 +67,11 @@ async fn main() {
             }
 
             game_grid.send_gamestate();
-            sleep(Duration::from_secs_f32(0.15));
+            let now = Instance::now();
+            while now.elapsed() < Duration::from_secs_f32(0.15) {
+                game_grid.draw();
+                scoreboard.draw_widget();
+            }
         }
 
 
