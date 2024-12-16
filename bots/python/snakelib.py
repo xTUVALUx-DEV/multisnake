@@ -20,6 +20,34 @@ class SnakeState(enum.Enum):
     ALIVE = 1
     DEAD = 0
 
+class BufferReader:
+    def __init__(self, buffer):
+        self.buff = buffer
+
+    def read_int(self):
+        out = struct.unpack("i", self.buff[:4])[0]
+        self.buff = self.buff[4:]
+        return out
+
+    def read_uint(self):
+        out = struct.unpack("I", self.buff[:4])[0]
+        self.buff = self.buff[4:]
+        return out
+
+    def read_short(self):
+        out = struct.unpack("h", self.buff[:4])[0]
+        self.buff = self.buff[2:]
+        return out
+
+    def read_ushort(self):
+        out = struct.unpack("H", self.buff[:4])[0]
+        self.buff = self.buff[2:]
+        return out
+    
+    def read_string(self, length):
+        out = buffer[:length].decode()
+        self.buff = self.buff[length:]
+        return self
 
 class GameGrid:
     def __init__(self, grid_data, height, width):
