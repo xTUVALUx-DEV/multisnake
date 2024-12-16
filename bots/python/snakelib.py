@@ -134,13 +134,23 @@ class BaseSnakeAi:
                 raise GameEnd
             
             if response[0] == 0:
-                direction: Direction = self.update(SnakeData(response[1]))
-                try:
-                    win32file.WriteFile(pipe, struct.pack("B", direction.value))
-                except Exception as e:
-                    print(e)
-                    raise GameEnd
+                buffer  = response[1]
+                if buffer[0] == 0:
+                    direction: Direction = self.update(SnakeData(buffer[1:]))
+                    
+                    try:
+                        win32file.WriteFile(pipe, struct.pack("B", direction.value))
+                    except Exception as e:
+                        print(e)
+                        raise GameEnd
+                    
+                elif buffer[0] == 2:
+                    winner_id = struct.unpack("i", buffer[1:5])[0] + 10
+                    self.on_gameend(winner_id)
 
+    
+    def on_gameend(self, winner_id):
+        print(f"Player with id {winner_id} won")
 
     def update(self, data: SnakeData) -> Direction:
         raise NotImplementedError("Du musst die update methode überschreiben")

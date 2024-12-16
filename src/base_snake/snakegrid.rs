@@ -64,11 +64,13 @@ impl<'a> SnakeGrid<'a> {
     }
 
     pub fn add_snake(&mut self, controller: &'a mut dyn SnakeController) {
-        let new_snake = Snake::new(self.snakes.len() as i32, controller);
-        self.snakes.push(new_snake);
-        while self.snakes.len() > self.snake_colors.len() {
+        while self.snakes.len()+1 > self.snake_colors.len() {
             self.snake_colors.push(random_color_bright_non_red());
         }
+        let color = self.snake_colors.last().unwrap();
+        let new_snake = Snake::new(self.snakes.len() as i32, controller, ((color.r * 255.) as u8, (color.g * 255.) as u8, (color.b * 255.) as u8));
+        self.snakes.push(new_snake);
+        
     }
 
     pub fn index_to_xy(index: i32, width: i32) -> (i32, i32) {

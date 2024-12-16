@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use macroquad::color::Color;
+
 use super::object::Tile;
 
 
@@ -13,6 +15,9 @@ pub struct SnakeData<'a> {
 impl<'a> SnakeData<'a> {
     pub fn encode(&self, snake_id: i32) -> Vec<u8> {
         let mut data: Vec<u8> = Vec::new();
+
+        // Packet ID
+        data.push(0);        
 
         // push the height, width and snakes attrivutes to the u8 vec
         data.extend(&self.height.to_le_bytes());
@@ -54,6 +59,7 @@ impl<'a> SnakeData<'a> {
     }
 }
 
+
 #[derive(Debug, Clone)]
 pub enum SnakeState {
     ALIVE,
@@ -69,6 +75,16 @@ pub enum Direction {
     NONE
 }
 
+#[derive(Eq, Hash, PartialEq, Clone)]
+pub struct SnakeRefData {
+    pub id: i32,
+    pub name: String,
+    pub alive: bool,
+    pub size: i32,
+    pub head: u32,
+    pub color: (u8, u8, u8)
+}
+
 
 #[derive(Debug)]
 pub struct Snake<'a> {
@@ -76,21 +92,14 @@ pub struct Snake<'a> {
     tiles: Vec<i32>,
     max_size: i32,
     controller: &'a mut dyn SnakeController,
-    state: SnakeState
-}
-
-pub struct SnakeRefData {
-    id: i32,
-    pub name: String,
-    pub alive: bool,
-    pub size: i32,
-    pub head: u32
+    state: SnakeState,
+    pub color: (u8, u8, u8)
 }
 
 
 impl<'a> Snake<'a> {
-    pub fn new(id: i32, controller: &'a mut dyn SnakeController) -> Self {
-        Self { id, tiles: Vec::new(), controller, max_size: 1, state: SnakeState::ALIVE }
+    pub fn new(id: i32, controller: &'a mut dyn SnakeController, color: (u8, u8, u8) ) -> Self {
+        Self { id, tiles: Vec::new(), controller, max_size: 1, state: SnakeState::ALIVE, color }
     }
     pub fn update_controller(&mut self) {
         self.controller.update();
@@ -158,13 +167,15 @@ impl<'a> Snake<'a> {
                 SnakeState::DEAD => false
             },
             size: self.max_size,
-            head: head_location as u32
+            head: head_location as u32,
+            color: self.color
         }
     }
 }
 
 pub trait SnakeController : Debug {
     fn report_data(&self, _data: SnakeData, _snake_id: i32) {}
+    fn send_winner(&self, winner: i32) {}
     fn connect(&mut self) -> bool { true } // Only used for ai_controllers
     fn disconnect(&self) {}
     fn get_name(&self) -> String;

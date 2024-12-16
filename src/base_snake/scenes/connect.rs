@@ -1,7 +1,7 @@
-use macroquad::prelude::*;
+use macroquad::{prelude::*, ui::{hash, root_ui, widgets::{self, Group}}};
 use windows::core::{s, PCSTR};
 
-use crate::base_snake::{snake::SnakeController, snake_controller::{ai_controller::PipeController, keyboard_controller::KeyboardController}};
+use crate::base_snake::{consts, snake::SnakeController, snake_controller::{ai_controller::PipeController, keyboard_controller::KeyboardController}};
 
 pub fn draw_player_names(names: &Vec<String>) {
     clear_background(RED);
@@ -17,6 +17,7 @@ pub async fn connection_screen(players: &mut Vec<Box<dyn SnakeController>>) {
 
     draw_text("Connecting", 20.0, 40.0, 40.0, WHITE);
     
+    draw_version_hud();
     next_frame().await;
 
     let mut connected_players: Vec<String> = Vec::new();
@@ -24,12 +25,14 @@ pub async fn connection_screen(players: &mut Vec<Box<dyn SnakeController>>) {
         if player.connect() {
             connected_players.push(player.get_name());
             draw_player_names(&connected_players);
+            draw_version_hud();
             next_frame().await;
         } else {
             println!("Unable to connect {}", player.get_name());
 
             connected_players.push("<Connection Error>".to_owned());
             draw_player_names(&connected_players);
+            draw_version_hud();
             next_frame().await;
         }
     }
@@ -83,8 +86,16 @@ pub async  fn add_players() -> Vec<Box<dyn SnakeController>> {
             draw_text(&format!("> {}", x.get_name()), 20.0, 90.0 + 20.*i as f32, 20.0, WHITE);
         });
 
+        draw_version_hud();
         next_frame().await;        
     }
 
     snake_controllers
 }
+
+pub fn draw_version_hud(){
+    draw_text(&("v".to_owned()+consts::VERSION), screen_width()-100., screen_height() - 20., 20.0, WHITE);
+
+
+}
+

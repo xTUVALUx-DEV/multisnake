@@ -84,6 +84,20 @@ impl SnakeController for PipeController {
         };
 
     }
+    fn send_winner(&self, winner_id: i32) {
+        if !self.is_connected() {
+            return;
+        }
+
+        let mut buffer = Vec::from([2]); // PacketId + WinnerId
+        buffer.extend((winner_id as i32).to_le_bytes());
+
+        unsafe {
+            let mut overlapped = OVERLAPPED::default();
+            let _ = WriteFile(self.pipe.unwrap(), Some(&buffer), Some(&mut (buffer.len() as u32)), Some(&mut overlapped));
+        };
+
+    }
     fn connect(&mut self) -> bool {
         unsafe {
             let pipe = CreateNamedPipeA(
