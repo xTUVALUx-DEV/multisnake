@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use macroquad::prelude::*;
-use super::{object::Tile, snake::{self, Direction, Snake, SnakeController, SnakeData, SnakeRefData}};
+use super::{object::Tile, snake::{self, Direction, PlayerInfo, Snake, SnakeController, SnakeData, SnakeRefData}};
 use ::rand::{thread_rng, Rng};
 
 
@@ -61,14 +63,28 @@ impl<'a> SnakeGrid<'a> {
         for (i, snake) in self.snakes.iter().enumerate() {
             draw_text(&snake.get_name(), x_offset, y_offset + i as f32*30., 30.0, self.snake_colors[snake.get_id() as usize]);
         }
+
+        self.snakes.iter()
+            .map(|x| (x.get_info(), x.color))
+            .filter(|x| x.0.is_some())
+            .map(|(x, c)| (x.unwrap().marked_cells, c))
+            .for_each(|(x, (r, g, b ))| {
+                x.iter().for_each(|cell_index| {
+                    println!("Draw");
+                    draw_rectangle(
+                        (*cell_index as i32 % self.width) as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_X, 
+                        (*cell_index as i32 / self.width) as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_Y, SQUARE_SIZE, SQUARE_SIZE, Color::from_rgba(r, g, b, 80));
+                });
+            });  
     }
 
     pub fn add_snake(&mut self, controller: &'a mut dyn SnakeController) {
         while self.snakes.len()+1 > self.snake_colors.len() {
             self.snake_colors.push(random_color_bright_non_red());
         }
-        let color = self.snake_colors.last().unwrap();
-        let new_snake = Snake::new(self.snakes.len() as i32, controller, ((color.r * 255.) as u8, (color.g * 255.) as u8, (color.b * 255.) as u8));
+        let snake_id = self.snakes.len();
+        let color = self.snake_colors[snake_id];
+        let new_snake = Snake::new(snake_id as i32, controller, ((color.r * 255.) as u8, (color.g * 255.) as u8, (color.b * 255.) as u8));
         self.snakes.push(new_snake);
         
     }
@@ -176,7 +192,7 @@ impl<'a> SnakeGrid<'a> {
         }
     }
     pub fn update_input(&mut self) {
-        for snake in &mut self.snakes {
+        for snake in self.snakes.iter_mut().filter(|x| !x.is_dead()) {
             snake.update_controller();
         }
     }
@@ -208,5 +224,13 @@ impl<'a> SnakeGrid<'a> {
     pub fn get_all_snake_refs(&self) -> Vec<SnakeRefData> {
         self.snakes.iter().map(|x| x.get_data()).collect()
     }
+
+    pub fn get_info_dict(&self) -> HashMap<i32, PlayerInfo> {
+        self.snakes.iter()
+            .map(|x| (x.get_id(), x.get_info()))
+            .filter(|x| x.1.is_some())
+            .map(|x| (x.0, x.1.unwrap())).collect::<HashMap<_, _>>()
+    }
+
 
 }

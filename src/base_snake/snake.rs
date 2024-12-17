@@ -4,9 +4,10 @@ use macroquad::color::Color;
 
 use super::object::Tile;
 
+#[derive(Debug)]
 pub struct PlayerInfo  {
-    pub marked_cells: Vec<i32>,
-    pub info_lines: Vec<String>
+    pub marked_cells: Vec<u16>,
+    pub info_lines: Vec<String>,
 }
 
 pub struct SnakeData<'a> {
@@ -78,8 +79,19 @@ pub enum Direction {
     RIGHT,
     NONE
 }
+impl Direction {
+    pub fn to_string(&self) -> String {
+        match self {
+            Direction::UP => "Up",
+            Direction::DOWN => "Down",
+            Direction::LEFT => "Left",
+            Direction::RIGHT => "Right",
+            Direction::NONE => "None",
+        }.to_string()
+    }
+}
 
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub struct SnakeRefData {
     pub id: i32,
     pub name: String,
@@ -174,6 +186,9 @@ impl<'a> Snake<'a> {
             head: head_location as u32,
             color: self.color
         }
+    }
+    pub fn get_info(&self) -> Option<PlayerInfo> {
+        self.controller.get_info()
     }
 }
 

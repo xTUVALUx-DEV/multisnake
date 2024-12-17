@@ -13,7 +13,7 @@ class GoUpAi(BaseSnakeAi):
 if __name__ == "__main__":
     while True:
         try:
-            player = GoUpAi("GoUpAi", player_slot='2')
+            player = GoUpAi("GoUpAi", player_slot='1')
             player.start()
 
         except GameEnd:

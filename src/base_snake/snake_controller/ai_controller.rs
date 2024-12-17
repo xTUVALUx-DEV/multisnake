@@ -5,7 +5,7 @@ use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
 use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
 use windows::Win32::System::IO::OVERLAPPED;
-use crate::base_snake::snake::{Direction, SnakeController, SnakeData};
+use crate::base_snake::snake::{Direction, PlayerInfo, SnakeController, SnakeData};
 
 #[derive(Debug)]
 pub struct PipeController {
@@ -13,11 +13,12 @@ pub struct PipeController {
     pipe_name: PCSTR,
     direction: Direction,
     ai_name: String,
-    missed_inputs: i32
+    missed_inputs: i32,
+    marked_cells: Vec<u16>
 }
 impl PipeController {
     pub fn new(pipe_name: PCSTR) -> Self {
-        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0 }
+        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new() }
     }
 
     fn is_connected(&self) -> bool {
@@ -27,7 +28,7 @@ impl PipeController {
 
 impl SnakeController for PipeController {
     fn clone_weak(&self) -> Box<(dyn SnakeController)> {
-        Box::new(PipeController { pipe: None, pipe_name: self.pipe_name, direction: self.direction, ai_name: self.ai_name.clone() })
+        Box::new(PipeController { pipe: None, pipe_name: self.pipe_name, direction: self.direction, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new() })
     }
 
     fn next_direction(&self) -> Direction {
@@ -38,7 +39,6 @@ impl SnakeController for PipeController {
         if !self.is_connected() {
             return;
         }
-
 
         let mut available_bytes = 0;
         let peek_result = unsafe {
@@ -52,7 +52,8 @@ impl SnakeController for PipeController {
             )
         };
         if peek_result.is_err() || available_bytes <= 0 {
-            missed_inputs += 1;
+            self.missed_inputs += 1;
+            println!("{}", self.missed_inputs);
             return;
         }
 
@@ -62,13 +63,30 @@ impl SnakeController for PipeController {
         let _ = unsafe {
             ReadFile(self.pipe.unwrap(), Some(&mut buffer), Some(&mut bytes_read), None)
         };
-        
-        match buffer.last().unwrap() {
-            10 => self.direction = Direction::UP,
-            11 => self.direction = Direction::DOWN,
-            12 => self.direction = Direction::LEFT,
-            13 => self.direction = Direction::RIGHT,
+        println!(" B {:?}", buffer);
+        while !buffer.is_empty() {
+            match buffer.remove(0) {
+                10 => self.direction = Direction::UP,
+                11 => self.direction = Direction::DOWN,
+                12 => self.direction = Direction::LEFT,
+                13 => self.direction = Direction::RIGHT,
+                20 if buffer.len() >= 2=> {
+                    let bytes: Vec<u8> = buffer.drain(0..2).collect();
+                    let length = u16::from_le_bytes([bytes[0], bytes[1]]);
+                    println!("C {}", length);
+                    self.marked_cells = (0..length).map(|i| {
+                        let bytes: Vec<u8> = buffer.drain(0..2).collect();
+                        u16::from_le_bytes([bytes[0], bytes[1]])
+                    }).collect();
+                    println!("A {:?}", self.marked_cells);
+                    
+                }
                 _ => println!("Invalid Message"),    
+            }
+            
+            if *(buffer.first().unwrap_or(&0)) == 0 {
+                break;
+            }
         }
 
     }
@@ -143,11 +161,14 @@ impl SnakeController for PipeController {
     fn get_name(&self) -> String {
         self.ai_name.clone()
     }
-    fn get_info(&self) -> PlayerInfo {
-        PlayerInfo {
-            vec![],
-            vec![]
-        }
+    fn get_info(&self) -> Option<PlayerInfo> {
+        Some(PlayerInfo {
+            marked_cells: self.marked_cells.clone(),
+            info_lines: vec![
+                format!("Missed Inputs: {}", self.missed_inputs),
+                format!("Current Direction: {}", self.direction.to_string())
+            ]
+        })
     }
 }
 

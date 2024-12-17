@@ -1,1 +1,3 @@
 /target
+/bots
+bots/python/snakelib.py

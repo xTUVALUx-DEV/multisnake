@@ -1,5 +1,5 @@
-use macroquad::{input::KeyCode};
-use macroquad::prelude::is_key_pressed;
+use macroquad::input::is_key_down;
+use macroquad::input::KeyCode;
 use crate::base_snake::snake::{Direction, SnakeController};
 
 #[derive(Debug)]
@@ -19,16 +19,16 @@ impl SnakeController for KeyboardController {
         self.direction
     }
     fn update(&mut self) {
-        if is_key_pressed(KeyCode::Up) {
+        if is_key_down(KeyCode::Up) {
             self.direction = Direction::UP;
         }
-        if is_key_pressed(KeyCode::Down) {
+        if is_key_down(KeyCode::Down) {
             self.direction = Direction::DOWN;
         }
-        if is_key_pressed(KeyCode::Left) {
+        if is_key_down(KeyCode::Left) {
             self.direction = Direction::LEFT;
         }
-        if is_key_pressed(KeyCode::Right) {
+        if is_key_down(KeyCode::Right) {
             self.direction = Direction::RIGHT;
         }
     }

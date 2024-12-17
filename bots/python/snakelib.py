@@ -138,7 +138,7 @@ class BaseSnakeAi:
         while True:
             try:
                 print(PIPE_BASE_NAME + self.player_slot)
-                pipe = win32file.CreateFile(
+                self.pipe = win32file.CreateFile(
                     PIPE_BASE_NAME + self.player_slot,
                     win32file.GENERIC_READ | win32file.GENERIC_WRITE,
                     0,
@@ -154,10 +154,10 @@ class BaseSnakeAi:
 
         print(f"Connected as {self.name}")
 
-        win32file.WriteFile(pipe, self.name.encode())
+        win32file.WriteFile(self.pipe, self.name.encode())
         while True:
             try:
-                response = win32file.ReadFile(pipe, 64 * 1024)
+                response = win32file.ReadFile(self.pipe, 64 * 1024)
             except:
                 raise GameEnd
             
@@ -167,7 +167,7 @@ class BaseSnakeAi:
                     direction: Direction = self.update(SnakeData(buffer[1:]))
                     
                     try:
-                        win32file.WriteFile(pipe, struct.pack("B", direction.value))
+                        win32file.WriteFile(self.pipe, struct.pack("B", direction.value))
                     except Exception as e:
                         print(e)
                         raise GameEnd
@@ -176,7 +176,15 @@ class BaseSnakeAi:
                     winner_id = struct.unpack("i", buffer[1:5])[0] + 10
                     self.on_gameend(winner_id)
 
-    
+    def send_marked_cells(self, cells):
+        packet = b'\x14' + struct.pack('H', len(cells)) + b''.join([struct.pack('H', x) for x in cells])
+        print(packet)
+        try:
+            win32file.WriteFile(self.pipe, packet)
+        except Exception as e:
+            print(e)
+            raise GameEnd
+
     def on_gameend(self, winner_id):
         print(f"Player with id {winner_id} won")
 
