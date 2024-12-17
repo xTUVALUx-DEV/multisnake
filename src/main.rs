@@ -1,6 +1,6 @@
 use std::{thread::sleep, time::{Duration, Instant}};
 
-use base_snake::{scenes::connect::{add_players, connection_screen}, scoreboard::{self, Scoreboard}};
+use base_snake::{scenes::connect::{add_players, connection_screen, GameConfig}, scoreboard::{self, Scoreboard}};
 use macroquad::prelude::*;
 pub mod base_snake;
 use base_snake::{snakegrid::SnakeGrid};
@@ -17,17 +17,17 @@ fn window_conf() -> Conf {
 #[macroquad::main(window_conf)]
 async fn main() {
 
-    let snake_controller_settings = add_players().await;
+    let GameConfig { snake_controller_list, grid_size: (grid_x, grid_y), sandbox } = add_players().await;
 
-    let mut scoreboard: Scoreboard = Scoreboard::new(snake_controller_settings.len() as i32);
+    let mut scoreboard: Scoreboard = Scoreboard::new(snake_controller_list.len() as i32);
     
     loop {
 
-        let mut snake_controllers = snake_controller_settings.iter().map(|x| (**x).clone_weak()).collect();
+        let mut snake_controllers = snake_controller_list.iter().map(|x| (**x).clone_weak()).collect();
         connection_screen(&mut snake_controllers).await;
         sleep(Duration::from_secs_f32(0.5));
 
-        let mut game_grid: SnakeGrid = SnakeGrid::new(20, 18);
+        let mut game_grid: SnakeGrid = SnakeGrid::new(grid_x, grid_y);
         snake_controllers.iter_mut().for_each(|x| { game_grid.add_snake(x.as_mut()); } );
 
         game_grid.start_game();  // Initialize all the Snakes (Spawnpoints)
@@ -44,27 +44,31 @@ async fn main() {
         loop {
             clear_background(BLACK);
             
-            game_grid.update_input();
-            game_grid.tick();
+            game_grid.update_input(); println!("Update");
+            game_grid.tick(); println!("Tick Done");
 
-            game_grid.draw();
-            scoreboard.draw_widget(game_grid.get_info_dict());
+            game_grid.draw(); println!("Draw");
+            scoreboard.draw_widget(game_grid.get_info_dict()); println!("Draw Widget");
+
             next_frame().await;
 
             
             match game_grid.check_end() {
                 Ok(snake_data) => {
-                    game_grid.draw();
-                    draw_end_message(&format!("{} Won!", snake_data.name)).await;
-                    winner = Some(snake_data.clone());
-                    break
+                    if !sandbox {
+                        game_grid.draw();
+                        draw_end_message(&format!("{} Won!", snake_data.name)).await;
+                        winner = Some(snake_data.clone());
+                        break
+                    }
                 },
                 Err(0) => {
                     if let Some(best_snake) = game_grid.get_all_snake_refs().iter().max_by_key(|item| item.size) {
-                        println!("Hightest points");
-                        game_grid.draw();
-                        draw_end_message(&format!("{} Won!", best_snake.name)).await;
-                        winner = Some(best_snake.clone());
+                        if !sandbox {
+                            game_grid.draw();
+                            draw_end_message(&format!("{} Won!", best_snake.name)).await;
+                            winner = Some(best_snake.clone());
+                        }
                         break;
                     }
                     draw_end_message(&format!("Tie!")).await;
@@ -82,9 +86,10 @@ async fn main() {
             }
         }
 
-
-        snake_controllers.iter_mut().for_each(|x| x.send_winner(winner.as_ref().expect("No winner? How did we get here??").id));
-        scoreboard.add_win(&winner.unwrap());
+        if !sandbox {
+            snake_controllers.iter_mut().for_each(|x| x.send_winner(winner.as_ref().expect("No winner? How did we get here??").id));
+            scoreboard.add_win(&winner.unwrap());
+        }
 
         sleep(Duration::from_secs_f32(0.3));
 

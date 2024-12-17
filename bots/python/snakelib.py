@@ -132,9 +132,11 @@ class BaseSnakeAi:
         1-4 are possible.
         """
         self.name = name
-        self.player_slot = player_slot
+        self.player_slot = str(player_slot)
+        self.current_markes_cells_packet = None
         
     def start(self):
+        print("Waiting for game...")
         while True:
             try:
                 print(PIPE_BASE_NAME + self.player_slot)
@@ -149,7 +151,6 @@ class BaseSnakeAi:
                 )
                 break
             except Exception as e:
-                print("Waiting for game...")
                 time.sleep(1)
 
         print(f"Connected as {self.name}")
@@ -164,10 +165,19 @@ class BaseSnakeAi:
             if response[0] == 0:
                 buffer  = response[1]
                 if buffer[0] == 0:
-                    direction: Direction = self.update(SnakeData(buffer[1:]))
+                    try:
+                        direction: Direction = self.update(SnakeData(buffer[1:]))
+                    except Exception as e:
+                        print("[ERROT]", e)
+                        continue
                     
                     try:
-                        win32file.WriteFile(self.pipe, struct.pack("B", direction.value))
+                        packet = struct.pack("B", direction.value)
+                        if self.current_markes_cells_packet is not None:
+                            packet += self.current_markes_cells_packet
+                            self.current_markes_cells_packet = None
+
+                        win32file.WriteFile(self.pipe, packet)
                     except Exception as e:
                         print(e)
                         raise GameEnd
@@ -178,12 +188,7 @@ class BaseSnakeAi:
 
     def send_marked_cells(self, cells):
         packet = b'\x14' + struct.pack('H', len(cells)) + b''.join([struct.pack('H', x) for x in cells])
-        print(packet)
-        try:
-            win32file.WriteFile(self.pipe, packet)
-        except Exception as e:
-            print(e)
-            raise GameEnd
+        self.current_markes_cells_packet = packet
 
     def on_gameend(self, winner_id):
         print(f"Player with id {winner_id} won")

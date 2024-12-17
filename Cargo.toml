@@ -7,6 +7,12 @@ edition = "2021"
 macroquad = "0.4.13"
 rand = "0.8.5"
 
+[env]
+RUST_BACKTRACE = "1"
+
+[profile.dev]
+overflow-checks = true
+
 [dependencies.windows]
 version = "0.58.0"
 features = [

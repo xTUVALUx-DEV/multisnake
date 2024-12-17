@@ -1,16 +1,14 @@
-use std::collections::HashMap;
+use std::{cmp::min, collections::HashMap};
 
 use macroquad::prelude::*;
 use super::{object::Tile, snake::{self, Direction, PlayerInfo, Snake, SnakeController, SnakeData, SnakeRefData}};
 use ::rand::{thread_rng, Rng};
 
 
-const SQUARE_SIZE: f32 = 20.;
-const SQUARE_SPACING: f32 = 10.;
-
 const GRID_OFFSET_X: f32 = 10.;
 const GRID_OFFSET_Y: f32 = 10.;
 
+const GRID_SCREEN_SIZE: (f32, f32) = (600., 900.);
 
 const SNAKE_COLORS: [Color; 4] = [BLUE, YELLOW, GREEN, ORANGE];
 
@@ -19,7 +17,10 @@ pub(crate) struct SnakeGrid<'a> {
     height: i32,
     snakes: Vec<Snake<'a>>,
     grid: Vec<Tile>,
-    snake_colors: Vec<Color>
+    snake_colors: Vec<Color>,
+    square_size: f32,
+    square_margin: f32,
+    total_square_size: f32
 }
 
 fn random_color_bright_non_red() -> Color {
@@ -36,9 +37,13 @@ impl<'a> SnakeGrid<'a> {
     pub fn new(width: i32, height: i32) -> Self {
         let empty_grid = vec![Tile::EMPTY; (width*height) as usize];
         let snake_colors = Vec::from(SNAKE_COLORS);
+        
+        let total_square_size = min((GRID_SCREEN_SIZE.0 / width as f32) as i32, (GRID_SCREEN_SIZE.1 / height as f32) as i32) as f32;
+        let square_size = total_square_size * 0.7;
+        let square_margin = total_square_size - square_size;
 
         Self {
-            width, height, snakes: Vec::new(), grid: empty_grid, snake_colors
+            width, height, snakes: Vec::new(), grid: empty_grid, snake_colors, square_size, square_margin, total_square_size
         }
     }
 
@@ -56,10 +61,13 @@ impl<'a> SnakeGrid<'a> {
                 &Tile::FOOD => RED,
             };
             
-            draw_rectangle(x as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_X, y as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_Y, SQUARE_SIZE, SQUARE_SIZE, color);
+            draw_rectangle(
+                x as f32*self.total_square_size + GRID_OFFSET_X, 
+                y as f32*self.total_square_size + GRID_OFFSET_Y, 
+                self.square_size, self.square_size, color);
         }
 
-        let (x_offset, y_offset) = (self.width as f32*(SQUARE_SIZE+SQUARE_SPACING) + 30., 20.);
+        let (x_offset, y_offset) = (self.width as f32*self.total_square_size + 30., 20.);
         for (i, snake) in self.snakes.iter().enumerate() {
             draw_text(&snake.get_name(), x_offset, y_offset + i as f32*30., 30.0, self.snake_colors[snake.get_id() as usize]);
         }
@@ -70,10 +78,10 @@ impl<'a> SnakeGrid<'a> {
             .map(|(x, c)| (x.unwrap().marked_cells, c))
             .for_each(|(x, (r, g, b ))| {
                 x.iter().for_each(|cell_index| {
-                    println!("Draw");
                     draw_rectangle(
-                        (*cell_index as i32 % self.width) as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_X, 
-                        (*cell_index as i32 / self.width) as f32*(SQUARE_SIZE+SQUARE_SPACING) + GRID_OFFSET_Y, SQUARE_SIZE, SQUARE_SIZE, Color::from_rgba(r, g, b, 80));
+                        (*cell_index as i32 % self.width) as f32* self.total_square_size + GRID_OFFSET_X, 
+                        (*cell_index as i32 / self.width) as f32* self.total_square_size + GRID_OFFSET_Y, 
+                        self.square_size, self.square_size, Color::from_rgba(r, g, b, 40));
                 });
             });  
     }

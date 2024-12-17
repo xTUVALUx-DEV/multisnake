@@ -27,7 +27,7 @@ class GoUpAi(BaseSnakeAi):
 if __name__ == "__main__":
     while True:
         try:
-            player = GoUpAi("DontCrashAi", player_slot='2')
+            player = GoUpAi("DontCrashAi", player_slot='1')
             player.start()
 
         except GameEnd:

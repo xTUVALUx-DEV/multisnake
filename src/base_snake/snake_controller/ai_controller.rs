@@ -65,12 +65,15 @@ impl SnakeController for PipeController {
         };
         println!(" B {:?}", buffer);
         while !buffer.is_empty() {
-            match buffer.remove(0) {
-                10 => self.direction = Direction::UP,
-                11 => self.direction = Direction::DOWN,
-                12 => self.direction = Direction::LEFT,
-                13 => self.direction = Direction::RIGHT,
-                20 if buffer.len() >= 2=> {
+            let a = buffer.remove(0);
+            println!("PacketId {}", a);
+            match a {
+                10 => { self.direction = Direction::UP; println!("UP")},
+                11 => { self.direction = Direction::DOWN; println!("DOWN")},
+                12 => { self.direction = Direction::LEFT; println!("LEFT")},
+                13 => { self.direction = Direction::RIGHT; println!("RIGHT")},
+                20 if buffer.len() >= 2 => {
+                    println!("InfoPacket");
                     let bytes: Vec<u8> = buffer.drain(0..2).collect();
                     let length = u16::from_le_bytes([bytes[0], bytes[1]]);
                     println!("C {}", length);
@@ -78,7 +81,7 @@ impl SnakeController for PipeController {
                         let bytes: Vec<u8> = buffer.drain(0..2).collect();
                         u16::from_le_bytes([bytes[0], bytes[1]])
                     }).collect();
-                    println!("A {:?}", self.marked_cells);
+                    //println!("A {:?}", self.marked_cells);
                     
                 }
                 _ => println!("Invalid Message"),    
