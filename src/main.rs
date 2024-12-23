@@ -1,9 +1,8 @@
 use std::{thread::sleep, time::{Duration, Instant}};
 
-use base_snake::{scenes::connect::{add_players, connection_screen, GameConfig}, scoreboard::{self, Scoreboard}};
+use multisnake::base_snake::{scenes::connect::{add_players, connection_screen, GameConfig}, scoreboard::{self, Scoreboard}};
 use macroquad::prelude::*;
-pub mod base_snake;
-use base_snake::{snakegrid::SnakeGrid};
+use multisnake::base_snake::snakegrid::SnakeGrid;
 
 fn window_conf() -> Conf {
     Conf {
@@ -40,15 +39,16 @@ async fn main() {
         sleep(Duration::from_secs_f32(0.2));
 
         let mut winner = None;
+        let start_time = Instant::now();
 
         loop {
             clear_background(BLACK);
             
-            game_grid.update_input(); println!("Update");
-            game_grid.tick(); println!("Tick Done");
+            game_grid.update_input();
+            game_grid.tick();
 
-            game_grid.draw(); println!("Draw");
-            scoreboard.draw_widget(game_grid.get_info_dict()); println!("Draw Widget");
+            game_grid.draw();
+            scoreboard.draw_widget(game_grid.get_info_dict());
 
             next_frame().await;
 
@@ -62,8 +62,9 @@ async fn main() {
                         break
                     }
                 },
-                Err(0) => {
-                    if let Some(best_snake) = game_grid.get_all_snake_refs().iter().max_by_key(|item| item.size) {
+                Err(1) if (start_time.elapsed() < Duration::from_secs(60) || sandbox) => {} // Ongoing
+                _ => {  // Err 0 or timeout
+                    if let Some(best_snake) = game_grid.get_all_snake_refs().iter().filter(|x| x.alive).max_by_key(|item| item.size) {
                         if !sandbox {
                             game_grid.draw();
                             draw_end_message(&format!("{} Won!", best_snake.name)).await;
@@ -74,7 +75,6 @@ async fn main() {
                     draw_end_message(&format!("Tie!")).await;
                     break;
                 },
-                _ => ()
             }
 
             game_grid.send_gamestate();
@@ -87,8 +87,10 @@ async fn main() {
         }
 
         if !sandbox {
-            snake_controllers.iter_mut().for_each(|x| x.send_winner(winner.as_ref().expect("No winner? How did we get here??").id));
-            scoreboard.add_win(&winner.unwrap());
+            if winner.is_some() {
+                snake_controllers.iter_mut().for_each(|x| x.send_winner(winner.as_ref().expect("No winner? How did we get here??").id));
+                scoreboard.add_win(&winner.unwrap());
+            }
         }
 
         sleep(Duration::from_secs_f32(0.3));

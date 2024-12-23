@@ -1,34 +1,57 @@
 use std::ptr;
-
+use std::sync::Arc;
+use std::fmt::Debug;
 use windows::core::PCSTR;
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
 use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
-use windows::Win32::System::IO::OVERLAPPED;
+use windows::Win32::System::IO::{GetOverlappedResult, OVERLAPPED};
 use crate::base_snake::snake::{Direction, PlayerInfo, SnakeController, SnakeData};
 
-#[derive(Debug)]
 pub struct PipeController {
     pipe: Option<HANDLE>,
     pipe_name: PCSTR,
     direction: Direction,
     ai_name: String,
     missed_inputs: i32,
-    marked_cells: Vec<u16>
+    marked_cells: Vec<u16>,
+    pending_writes: Vec<(Arc<Vec<u8>>, OVERLAPPED)>,
 }
 impl PipeController {
     pub fn new(pipe_name: PCSTR) -> Self {
-        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new() }
+        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new(), pending_writes: Vec::new() }
     }
 
     fn is_connected(&self) -> bool {
         self.pipe.is_some()
     }
+    pub fn check_write_completion(&mut self) {
+        self.pending_writes.retain_mut(|(_, mut overlapped)| {
+            let mut bytes_transferred = 0;
+
+            unsafe {
+                let result = GetOverlappedResult(
+                    self.pipe.unwrap(),
+                    &mut overlapped,
+                    &mut bytes_transferred,
+                    false,
+                );
+                println!("Result: {:?}", result);
+                if result.is_err() {
+                    return true;
+                }
+                else {
+                    return false;
+                }
+            }
+        });
+    }
+
 }
 
 impl SnakeController for PipeController {
     fn clone_weak(&self) -> Box<(dyn SnakeController)> {
-        Box::new(PipeController { pipe: None, pipe_name: self.pipe_name, direction: self.direction, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new() })
+        Box::new(PipeController { pipe: None, pipe_name: self.pipe_name, direction: self.direction, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new(), pending_writes: Vec::new() })
     }
 
     fn next_direction(&self) -> Direction {
@@ -93,31 +116,45 @@ impl SnakeController for PipeController {
         }
 
     }
-    fn report_data(&self, data: SnakeData, snake_id: i32) {
+    fn report_data(&mut self, data: SnakeData, snake_id: i32) {
         if !self.is_connected() {
             return;
         }
-
-        let buffer = data.encode(snake_id).to_vec();
-        
-        unsafe {
-            let mut overlapped = OVERLAPPED::default();
-            let _ = WriteFile(self.pipe.unwrap(), Some(&buffer), Some(&mut (buffer.len() as u32)), Some(&mut overlapped));
+        let pipe = match self.pipe {
+            Some(ref pipe) if !pipe.is_invalid() => *pipe,
+            _ => {
+                eprintln!("Invalid pipe handle");
+                return;
+            }
         };
 
+
+        let buffer = Arc::new(data.encode(snake_id).to_vec());
+        let buffer_ptr = buffer.as_ptr(); 
+        let mut overlapped = OVERLAPPED::default();
+        unsafe {
+            let _ = WriteFile(pipe, Some(std::slice::from_raw_parts(buffer_ptr, buffer.len())), Some(&mut (buffer.len() as u32)), Some(&mut overlapped));
+        };
+        // Storing the buffer for it to not be dropped
+        self.check_write_completion();
+        self.pending_writes.push((buffer, overlapped));
+
     }
-    fn send_winner(&self, winner_id: i32) {
+    fn send_winner(&mut self, winner_id: i32) {
         if !self.is_connected() {
             return;
         }
 
         let mut buffer = Vec::from([2]); // PacketId + WinnerId
         buffer.extend((winner_id as i32).to_le_bytes());
+        let buff_ptr = Arc::new(buffer);
 
+        let mut overlapped = OVERLAPPED::default();
         unsafe {
-            let mut overlapped = OVERLAPPED::default();
-            let _ = WriteFile(self.pipe.unwrap(), Some(&buffer), Some(&mut (buffer.len() as u32)), Some(&mut overlapped));
+            let _ = WriteFile(self.pipe.unwrap(), Some(std::slice::from_raw_parts(buff_ptr.as_ptr(), buff_ptr.len())), Some(&mut (buff_ptr.len() as u32)), Some(&mut overlapped));
         };
+
+        self.pending_writes.push((buff_ptr, overlapped));
 
     }
     fn connect(&mut self) -> bool {
@@ -127,8 +164,8 @@ impl SnakeController for PipeController {
                 PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                 PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
                 PIPE_UNLIMITED_INSTANCES,
-                2044,
-                2044,
+                5044,
+                5044,
                 0,
                 Some(ptr::null_mut()),
             ).unwrap_or_else(|e| {
@@ -175,7 +212,11 @@ impl SnakeController for PipeController {
     }
 }
 
-
+impl Debug for PipeController {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PipeController").field("pipe", &self.pipe).field("pipe_name", &self.pipe_name).field("direction", &self.direction).field("ai_name", &self.ai_name).field("missed_inputs", &self.missed_inputs).field("marked_cells", &self.marked_cells).finish()
+    }
+}
 
 
 

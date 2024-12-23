@@ -5,11 +5,11 @@ use macroquad::{math::{vec2, Vec2}, ui::{hash, root_ui, widgets::{self, Group}}}
 
 use super::snake::{PlayerInfo, SnakeRefData};
 
-fn with_skin<F>(ui: &mut Ui, skin: Skin, func: F)
+fn with_skin<F>(ui: &mut Ui, skin: &Skin, func: F)
 where
     F: FnOnce(&mut Ui),
 {
-    ui.push_skin(&skin);
+    ui.push_skin(skin);
     func(ui);
     ui.pop_skin();
 }
@@ -54,15 +54,15 @@ impl Scoreboard {
                             .margin(RectOffset::new(10.0, 10.0, 10.0, 10.0))
                             .build();
 
-        with_skin(&mut root_ui(), skin.clone(), |ui| {
-            println!("Do widget draw");
+        let sum: i32 = self.scoretable.values().map(|x| x.1).sum();
+
+        
+        with_skin(&mut root_ui(), &skin, |ui| {
             widgets::Window::new(hash!(), self.default_position, vec2(350., 1200.))
                 .label("Scoreboard")
                 .titlebar(true)
                 .ui(ui, |ui| {
                 for (id, (snake, score)) in scoretable {
-                        println!("Drawing {}", snake.name);
-                        let sum: i32 = self.scoretable.values().map(|x| x.1).sum();
                         Group::new(hash!("scores"), Vec2::new(300., 80.)).ui(ui, |ui| {
                             let mut cell_style = skin.clone();
                             cell_style.label_style = ui
@@ -71,10 +71,9 @@ impl Scoreboard {
                                 .font_size(25)
                                 .build();
                             
-
-                            ui.push_skin(&cell_style);
-                            ui.label(Vec2::new(2., 2.), &snake.name);
-                            ui.pop_skin();
+                            with_skin(ui, &cell_style, |ui: &mut Ui| {
+                                ui.label(Vec2::new(2., 2.), &snake.name);
+                            });
 
                             ui.label(Vec2::new(2., 22.), &format!("{}/{}", score, sum));
 
@@ -90,20 +89,17 @@ impl Scoreboard {
                                 .font_size(15)
                                 .build();
                             
-                            ui.push_skin(&cell_style);
-                            if ui.button(Vec2::new(185., 40.), "Show Details") {
-                                println!("A{}", snake.id);
-                                self.current_display = Some(snake.id);
-                            }
-                            ui.pop_skin();
+                            with_skin(ui, &cell_style, |ui: &mut Ui| {
+                                if ui.button(Vec2::new(185., 40.), "Show Details") {
+                                    println!("A{}", snake.id);
+                                    self.current_display = Some(snake.id);
+                                }
+                            });
                         });
 
-                        println!("Finished drawing {}", snake.name);
                     }
                 });
         });
-            println!("End widget draw");
-
        
         if let Some(snake_id) = self.current_display {
             let snake_opt = self.scoretable.get(&snake_id);
@@ -113,7 +109,6 @@ impl Scoreboard {
                 return;
             }
             if info_opt.is_none() {
-                println!("couldnt find {} {:?}", snake_id, snake_opt);
                 return;
             }
             
@@ -152,7 +147,6 @@ impl Scoreboard {
 
             root_ui().pop_skin();
         }
-        println!("End function");
     }
 
     fn get_style() -> Skin {

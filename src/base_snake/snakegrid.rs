@@ -12,7 +12,8 @@ const GRID_SCREEN_SIZE: (f32, f32) = (600., 900.);
 
 const SNAKE_COLORS: [Color; 4] = [BLUE, YELLOW, GREEN, ORANGE];
 
-pub(crate) struct SnakeGrid<'a> {
+
+pub struct SnakeGrid<'a> {
     width: i32,
     height: i32,
     snakes: Vec<Snake<'a>>,
@@ -105,6 +106,7 @@ impl<'a> SnakeGrid<'a> {
     }
 
     pub fn kill_snake(grid: &mut Vec<Tile>, snake: &mut Snake) {
+        println!("{:?} died", snake);
         let tiles = snake.kill();
         for tile in tiles {
             grid[*tile as usize] = Tile::DeadSnake;
@@ -130,6 +132,8 @@ impl<'a> SnakeGrid<'a> {
     pub fn tick(&mut self) {
         let width = self.width;
 
+        let mut collisions =  Vec::new();
+        
         for snake in &mut self.snakes.iter_mut() {
             if snake.is_dead() {
                 continue;
@@ -152,10 +156,21 @@ impl<'a> SnakeGrid<'a> {
                 continue;
             }
             let new_head = y*self.width + x; // Where to move to
+
             // Check collisions
+            if collisions.contains(&new_head) {
+                SnakeGrid::kill_snake(&mut self.grid, snake);
+                return;
+            }
+            
             match &self.grid[new_head as usize] {
                 Tile::EMPTY => {},
                 Tile::FOOD => { snake.grow(); SnakeGrid::place_food(&mut self.grid); },
+                Tile::Snake { id: _ } => {
+                    collisions.push(new_head);
+                    SnakeGrid::kill_snake(&mut self.grid, snake);
+                    return;
+                }
                 _ => {
                     SnakeGrid::kill_snake(&mut self.grid, snake);
                     return;
@@ -204,13 +219,14 @@ impl<'a> SnakeGrid<'a> {
             snake.update_controller();
         }
     }
-    pub fn send_gamestate(&self) {
-        for snake in &self.snakes {
+    pub fn send_gamestate(&mut self) {
+        let snakes: Vec<SnakeRefData> = self.snakes.iter().map(|x| x.get_data()).collect();
+        for snake in &mut self.snakes {
             snake.send_gamestate(SnakeData {
                 grid: &self.grid,
                 height: self.height as u16,
                 width: self.width as u16,
-                snakes: self.snakes.iter().map(|x| x.get_data()).collect(),
+                snakes: snakes.clone(),
             });
         }
     }

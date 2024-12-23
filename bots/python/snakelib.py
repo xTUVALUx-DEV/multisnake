@@ -35,17 +35,23 @@ class BufferReader:
         return out
 
     def read_short(self):
-        out = struct.unpack("h", self.buff[:4])[0]
+        out = struct.unpack("h", self.buff[:2])[0]
         self.buff = self.buff[2:]
         return out
 
     def read_ushort(self):
-        out = struct.unpack("H", self.buff[:4])[0]
+        out = struct.unpack("H", self.buff[:2])[0]
         self.buff = self.buff[2:]
         return out
     
-    def read_string(self, length):
-        out = buffer[:length].decode()
+    def read_ubyte(self):
+        out = struct.unpack("B", self.buff[:1])[0]
+        self.buff = self.buff[1:]
+        return out
+
+    def read_string(self):
+        length = self.read_ushort()
+        out = self.buff[:length].decode()
         self.buff = self.buff[length:]
         return self
 
@@ -75,10 +81,12 @@ class GameGrid:
         return self.data
 
 class Snake:
-    def __init__(self, id, name, state, head):
+    def __init__(self, id, name, state, tiles, head, max_size):
         self.id = id
         self.name = name
+        self.max_size = max_size
         self.state = SnakeState(state)
+        self.tiles = tiles
         self.head = head
     
     def __repr__(self):
@@ -86,7 +94,7 @@ class Snake:
 
 class SnakeData:
     def __init__(self, buffer):
-        self.height = struct.unpack('H', buffer[:2])[0]
+        self.height = struct.unpack('H', buffer[:2])[0]  # Todo: Use the BufferReader
         self.width = struct.unpack('H', buffer[2:4])[0]
         my_snake_id = struct.unpack('H', buffer[4:6])[0] + 10
 
@@ -103,33 +111,31 @@ class SnakeData:
         
         start_snakes = 6+(self.height*self.width)*2
         num_snakes = struct.unpack('H', buffer[start_snakes:start_snakes+2])[0]
-        
-        curr = start_snakes + 2
+        reader = BufferReader(buffer[start_snakes + 2:])
         for i in range(num_snakes):
-            snake_id = struct.unpack('h', buffer[curr:curr+2])[0] + 10
-            curr += 2
-            len_name = struct.unpack('H', buffer[curr:curr+2])[0]
-            curr += 2
-            name = buffer[curr:curr+len_name].decode()
-            curr += len_name
-            print(buffer[curr:])
-            head_x, head_y = struct.unpack('II', buffer[curr:curr+8])
-            curr += 8
-            alive = buffer[curr]
-            curr += 1
-            snake = Snake(snake_id, name, alive, (head_x, head_y))
+            snake_id = reader.read_short() + 10
+            snake_name = reader.read_string()
+            max_size = reader.read_ushort()
+            tiles_len = reader.read_ushort()
+            tiles = []
+            for i in range(tiles_len):
+                tiles.append(reader.read_ushort())
+
+            alive = reader.read_ubyte()
+            head = (tiles[0] % self.width, tiles[0] // self.width)
+
+            snake = Snake(snake_id, snake_name, alive, tiles, head, max_size)
             self.snakes[snake_id] = snake
-            print(snake_id, my_snake_id)
             if snake_id == my_snake_id:
                 self.me = snake
-        
+
         self.grid: GameGrid = GameGrid(self.raw_grid, self.height, self.width)
 
 class BaseSnakeAi:
     def __init__(self, name, player_slot='1'):
         """
         To use multiple ais give each of them different 'player_slot's.
-        1-4 are possible.
+        1-12 are possible.
         """
         self.name = name
         self.player_slot = str(player_slot)
@@ -137,9 +143,9 @@ class BaseSnakeAi:
         
     def start(self):
         print("Waiting for game...")
+        print(PIPE_BASE_NAME + self.player_slot)
         while True:
             try:
-                print(PIPE_BASE_NAME + self.player_slot)
                 self.pipe = win32file.CreateFile(
                     PIPE_BASE_NAME + self.player_slot,
                     win32file.GENERIC_READ | win32file.GENERIC_WRITE,
@@ -166,10 +172,13 @@ class BaseSnakeAi:
                 buffer  = response[1]
                 if buffer[0] == 0:
                     try:
-                        direction: Direction = self.update(SnakeData(buffer[1:]))
+                        data = SnakeData(buffer[1:])
+                        self.me = data.me
+                        direction: Direction = self.update(data)
                     except Exception as e:
                         print("[ERROT]", e)
-                        continue
+                        raise e
+                        # continue
                     
                     try:
                         packet = struct.pack("B", direction.value)
