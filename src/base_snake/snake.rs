@@ -184,7 +184,7 @@ pub enum SnakeState {
     DEAD
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     UP,
     DOWN,
@@ -237,8 +237,8 @@ pub struct SnakeRefResponseData { // Trucated to not include size and color
 
 #[derive(Debug)]
 pub struct Snake<'a> {
-    id: i32,
-    tiles: Vec<i32>,
+    pub id: i32,
+    pub tiles: Vec<i32>,
     max_size: i32,
     controller: &'a mut dyn SnakeController,
     state: SnakeState,
@@ -321,6 +321,12 @@ impl<'a> Snake<'a> {
     }
     pub fn get_info(&self) -> Option<PlayerInfo> {
         self.controller.get_info()
+    }
+    pub fn disconnect_controller(&mut self) {
+        self.controller.disconnect()
+    }
+    pub fn connect_controller(&mut self) -> bool {
+        self.controller.connect()
     }
 }
 

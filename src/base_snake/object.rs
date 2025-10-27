@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-
+use std::hash::Hash;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tile {
@@ -9,6 +9,11 @@ pub enum Tile {
         id: i32,
     },
     DeadSnake
+}
+impl Hash for Tile {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.get_tile_id().hash(state);
+    }
 }
 
 

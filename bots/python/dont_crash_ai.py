@@ -1,3 +1,6 @@
+from argparse import ArgumentParser
+from threading import Thread
+import time
 from snakelib import BaseSnakeAi, Direction, GameEnd, SnakeData
 
 class GoUpAi(BaseSnakeAi):
@@ -23,16 +26,31 @@ class GoUpAi(BaseSnakeAi):
                         return self.last_dir
 
         return self.last_dir
+    
 
-if __name__ == "__main__":
+def run(slot):
     while True:
         try:
-            player = GoUpAi("DontCrashAi", player_slot='1')
+            player = GoUpAi("DontCrashAi", player_slot=slot)
             player.start()
 
         except GameEnd:
             print("New Game!")
             continue
 
+if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument('Player Slot', default='1', nargs='?')
+    parser.add_argument('-n', type=int, default=None, nargs='?')
+    args = vars(parser.parse_args())
+    
+    if args['n'] != None:
+        threads = [Thread(target=run, args=(i+1,), daemon=True) for i in range(args['n'])]
+        [t.start() for t in threads]
+        
+        while True:
+            time.sleep(0.5)
 
+        sys.exit()
 
+    run(args['Player Slot'])

@@ -25,16 +25,16 @@ impl SnakeController for KeyboardController {
         self.direction
     }
     fn update(&mut self) {
-        if is_key_down(self.up_input) {
+        if is_key_down(self.up_input) && self.direction != Direction::DOWN {
             self.direction = Direction::UP;
         }
-        if is_key_down(self.down_input) {
+        else if is_key_down(self.down_input) && self.direction != Direction::UP {
             self.direction = Direction::DOWN;
         }
-        if is_key_down(self.left_input) {
+        else if is_key_down(self.left_input) && self.direction != Direction::RIGHT {
             self.direction = Direction::LEFT;
         }
-        if is_key_down(self.right_input) {
+        else if is_key_down(self.right_input) && self.direction != Direction::LEFT {
             self.direction = Direction::RIGHT;
         }
     }

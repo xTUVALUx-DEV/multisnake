@@ -5,23 +5,24 @@ use super::{object::Tile, snake::{self, Direction, PlayerInfo, Snake, SnakeContr
 use ::rand::{thread_rng, Rng};
 
 
-const GRID_OFFSET_X: f32 = 10.;
-const GRID_OFFSET_Y: f32 = 10.;
+pub const GRID_OFFSET_X: f32 = 10.;
+pub const GRID_OFFSET_Y: f32 = 10.;
 
 const GRID_SCREEN_SIZE: (f32, f32) = (600., 900.);
 
-const SNAKE_COLORS: [Color; 4] = [BLUE, YELLOW, GREEN, ORANGE];
-
 
 pub struct SnakeGrid<'a> {
-    width: i32,
+    pub width: i32,
     height: i32,
     snakes: Vec<Snake<'a>>,
     grid: Vec<Tile>,
     snake_colors: Vec<Color>,
     square_size: f32,
     square_margin: f32,
-    total_square_size: f32
+    pub total_square_size: f32,
+
+    on_food_handler: Option<Box<dyn Fn() -> ()>>,
+    on_death_handler: Option<Box<dyn Fn() -> ()>>
 }
 
 fn random_color_bright_non_red() -> Color {
@@ -36,6 +37,8 @@ fn random_color_bright_non_red() -> Color {
 
 impl<'a> SnakeGrid<'a> {
     pub fn new(width: i32, height: i32) -> Self {
+        let SNAKE_COLORS: [Color; 7] =  [Color::from_rgba(171, 2, 168, 255), Color::from_rgba(0, 134, 119, 255), Color::from_rgba(143, 0, 255, 255), BLUE, YELLOW, GREEN, ORANGE];
+
         let empty_grid = vec![Tile::EMPTY; (width*height) as usize];
         let snake_colors = Vec::from(SNAKE_COLORS);
         
@@ -44,8 +47,12 @@ impl<'a> SnakeGrid<'a> {
         let square_margin = total_square_size - square_size;
 
         Self {
-            width, height, snakes: Vec::new(), grid: empty_grid, snake_colors, square_size, square_margin, total_square_size
+            width, height, snakes: Vec::new(), grid: empty_grid, snake_colors, square_size, square_margin, total_square_size, on_food_handler: None, on_death_handler: None
         }
+    }
+
+    pub fn clone_raw_grid(&self) -> Vec<Tile> {
+        self.grid.clone()
     }
 
     pub fn draw(&self) {
@@ -56,7 +63,7 @@ impl<'a> SnakeGrid<'a> {
 
             
             let color = match object {
-                &Tile::Snake {id} => self.snake_colors[id as usize],
+                &Tile::Snake {id} =>  self.snake_colors[id as usize],
                 &Tile::DeadSnake => GRAY,
                 &Tile::EMPTY => DARKGRAY,
                 &Tile::FOOD => RED,
@@ -105,11 +112,14 @@ impl<'a> SnakeGrid<'a> {
         x + width*y
     }
 
-    pub fn kill_snake(grid: &mut Vec<Tile>, snake: &mut Snake) {
+    pub fn kill_snake(grid: &mut Vec<Tile>, snake: &mut Snake, handler: &Option<Box<dyn Fn()>>) {
         println!("{:?} died", snake);
         let tiles = snake.kill();
         for tile in tiles {
             grid[*tile as usize] = Tile::DeadSnake;
+        }
+        if let Some(handler) = handler {
+            handler();
         }
     }
 
@@ -152,27 +162,33 @@ impl<'a> SnakeGrid<'a> {
             
             // Check Borders
             if x < 0 || x >= self.width || y < 0 || y >= self.height {
-                SnakeGrid::kill_snake(&mut self.grid, snake);
+                SnakeGrid::kill_snake(&mut self.grid, snake, &self.on_death_handler);
                 continue;
             }
             let new_head = y*self.width + x; // Where to move to
 
             // Check collisions
             if collisions.contains(&new_head) {
-                SnakeGrid::kill_snake(&mut self.grid, snake);
+                SnakeGrid::kill_snake(&mut self.grid, snake, &self.on_death_handler);
                 return;
             }
             
             match &self.grid[new_head as usize] {
                 Tile::EMPTY => {},
-                Tile::FOOD => { snake.grow(); SnakeGrid::place_food(&mut self.grid); },
+                Tile::FOOD => { 
+                    snake.grow(); 
+                    SnakeGrid::place_food(&mut self.grid);
+                    if let Some(handler) = &mut &self.on_food_handler {
+                        handler();
+                    }
+                },
                 Tile::Snake { id: _ } => {
                     collisions.push(new_head);
-                    SnakeGrid::kill_snake(&mut self.grid, snake);
+                    SnakeGrid::kill_snake(&mut self.grid, snake, &self.on_death_handler);
                     return;
                 }
                 _ => {
-                    SnakeGrid::kill_snake(&mut self.grid, snake);
+                    SnakeGrid::kill_snake(&mut self.grid, snake, &self.on_death_handler);
                     return;
                 }
             }
@@ -255,6 +271,47 @@ impl<'a> SnakeGrid<'a> {
             .filter(|x| x.1.is_some())
             .map(|x| (x.0, x.1.unwrap())).collect::<HashMap<_, _>>()
     }
+
+    pub fn set_square(&mut self, index: usize, snake: Option<i32>) {
+        // Very very unsafe! Only for debugging   (Because the snake'id is not bound to be the index) 
+        let old = &self.grid[index];
+        if let Tile::Snake { id } = old {
+
+            let index_to_remove = self.snakes[*id as usize].tiles.iter().position(|x| *x == index as i32).unwrap();
+            self.snakes[*id as usize].tiles.remove(index_to_remove);
+        }
+
+        match snake {
+            None => {
+                self.grid[index] = Tile::EMPTY;
+            },
+            Some(snake_id) => {
+                let mut snake = &mut self.snakes[snake_id as usize];
+                self.grid[index] = Tile::Snake { id: snake_id };
+                snake.tiles.push(index as i32);
+            }
+        }
+    }
+
+    pub fn reconnect(&mut self) {
+        self.snakes.iter_mut().for_each(|snake| { snake.disconnect_controller(); snake.connect_controller(); });
+    }
+    
+    pub fn clear(&mut self) {
+        // Clears the Grid and adds one food
+        self.grid.iter_mut().for_each(|x| *x = Tile::EMPTY);
+        self.snakes.iter_mut().for_each(|x| x.tiles.clear());
+        self.do_place_food();
+    }
+
+    pub fn register_on_food_handler(&mut self, handler: Box<(dyn Fn())>) {
+        self.on_food_handler = Some(handler)
+    }
+
+    pub fn register_on_death(&mut self, handler: Box<(dyn Fn())>) {
+        self.on_death_handler = Some(handler);
+    }
+
 
 
 }

@@ -1,8 +1,9 @@
-use std::{thread::sleep, time::{Duration, Instant}};
+use std::{sync::Arc, thread::sleep, time::{Duration, Instant}};
 
-use multisnake::base_snake::{scenes::connect::{add_players, connection_screen, GameConfig}, scoreboard::{self, Scoreboard}};
-use macroquad::prelude::*;
+use multisnake::base_snake::{scenes::{connect::{add_players, connection_screen, GameConfig}, snake_draw::snake_draw}, scoreboard::{self, Scoreboard}};
+use macroquad::{audio::{load_sound, play_sound, PlaySoundParams}, prelude::*};
 use multisnake::base_snake::snakegrid::SnakeGrid;
+
 
 fn window_conf() -> Conf {
     Conf {
@@ -13,10 +14,13 @@ fn window_conf() -> Conf {
     }
 }
 
+
 #[macroquad::main(window_conf)]
 async fn main() {
+    let sound_coin = Arc::new(load_sound("assets/pickupCoin.wav").await.unwrap());
+    let sound_explosion = Arc::new(load_sound("assets/explosion.wav").await.unwrap());
 
-    let GameConfig { snake_controller_list, grid_size: (grid_x, grid_y), sandbox } = add_players().await;
+    let GameConfig { snake_controller_list, grid_size: (grid_x, grid_y), sandbox, snake_draw_mode } = add_players().await;
 
     let mut scoreboard: Scoreboard = Scoreboard::new(snake_controller_list.len() as i32);
     
@@ -27,13 +31,40 @@ async fn main() {
         sleep(Duration::from_secs_f32(0.5));
 
         let mut game_grid: SnakeGrid = SnakeGrid::new(grid_x, grid_y);
+        game_grid.register_on_food_handler(Box::new({
+            let sound = Arc::clone(&sound_coin);
+            
+            move || play_sound(
+                &sound,
+                PlaySoundParams {
+                    looped: false,
+                    volume: 0.2,
+                },
+            )
+        }));
+        game_grid.register_on_death(Box::new({
+            let sound = Arc::clone(&sound_explosion);
+            
+            move || play_sound(
+                &sound,
+                PlaySoundParams {
+                    looped: false,
+                    volume: 0.2,
+                },
+            )
+        }));
+        
         snake_controllers.iter_mut().for_each(|x| { game_grid.add_snake(x.as_mut()); } );
 
-        game_grid.start_game();  // Initialize all the Snakes (Spawnpoints)
         game_grid.do_place_food();
 
-        scoreboard.initalize(game_grid.get_all_snake_refs()); // Draw the initial scoreboard now because the names and ids are unknown beforehand
+        if snake_draw_mode {
+            snake_draw(game_grid).await;
+            continue;
+        }
 
+        game_grid.start_game();  // Initialize all the Snakes (Spawnpoints)
+        scoreboard.initalize(game_grid.get_all_snake_refs()); // Draw the initial scoreboard now because the names and ids are unknown beforehand
         game_grid.draw();
 
         sleep(Duration::from_secs_f32(0.2));
@@ -62,7 +93,7 @@ async fn main() {
                         break
                     }
                 },
-                Err(1) if (start_time.elapsed() < Duration::from_secs(60) || sandbox) => {} // Ongoing
+                Err(1) if (start_time.elapsed() < Duration::from_secs(600) || sandbox) => {} // Ongoing
                 _ => {  // Err 0 or timeout
                     if let Some(best_snake) = game_grid.get_all_snake_refs().iter().filter(|x| x.alive).max_by_key(|item| item.size) {
                         if !sandbox {

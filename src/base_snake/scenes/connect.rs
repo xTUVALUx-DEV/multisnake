@@ -6,7 +6,8 @@ use crate::base_snake::{consts, snake::SnakeController, snake_controller::{ai_co
 pub struct GameConfig {
     pub snake_controller_list: Vec<Box<dyn SnakeController>>,
     pub grid_size: (i32, i32),
-    pub sandbox: bool
+    pub sandbox: bool,
+    pub snake_draw_mode: bool
 
 }
 
@@ -68,6 +69,7 @@ pub async  fn add_players() -> GameConfig {
     
     let (mut grid_size_x, mut grid_size_y) = (consts::GRID_SIZE.0.to_string(), consts::GRID_SIZE.1.to_string());
     let mut sandbox = false;
+    let mut snake_draw = false;
 
     loop {
 
@@ -108,8 +110,11 @@ pub async  fn add_players() -> GameConfig {
                 ui.input_text(hash!(), "Grid Y Size", &mut grid_size_y);
 
                 ui.tree_node(hash!(), "Debug", |ui| {
-                    if ui.button(None, "Click me") {
+                    if ui.button(None, "Sandbox") {
                         sandbox = true;
+                    }
+                    if ui.button(None, "Eval Test") {
+                        snake_draw = true;
                     }
                     if ui.button(None, "Add Player (Arrow)") {
                         snake_controllers.push(Box::new(KeyboardController::arrows()));
@@ -124,7 +129,7 @@ pub async  fn add_players() -> GameConfig {
         draw_version_hud();
         next_frame().await;        
 
-        if sandbox {
+        if sandbox || snake_draw {
             break; // Sandbox button click
         }
     }
@@ -144,6 +149,7 @@ pub async  fn add_players() -> GameConfig {
         snake_controller_list: snake_controllers,
         grid_size: (parsed_grid_size_x.unwrap(), parsed_grid_size_y.unwrap()),
         sandbox,
+        snake_draw_mode: snake_draw
     }
 }
 

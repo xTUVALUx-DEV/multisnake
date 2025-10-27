@@ -122,6 +122,9 @@ class SnakeData:
                 tiles.append(reader.read_ushort())
 
             alive = reader.read_ubyte()
+            if len(tiles) == 0:
+                continue
+            
             head = (tiles[0] % self.width, tiles[0] // self.width)
 
             snake = Snake(snake_id, snake_name, alive, tiles, head, max_size)
