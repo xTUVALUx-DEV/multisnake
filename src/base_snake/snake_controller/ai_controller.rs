@@ -1,13 +1,25 @@
 use std::ptr;
 use std::sync::Arc;
 use std::fmt::Debug;
-use windows::core::PCSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE};
-use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
-use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
-use windows::Win32::System::IO::{GetOverlappedResult, OVERLAPPED};
 use crate::base_snake::snake::{Direction, PlayerInfo, SnakeController, SnakeData};
 
+#[cfg(target_os = "windows")]
+mod platform_imports {
+    pub use windows::core::PCSTR;
+    pub use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    pub use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX};
+    pub use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekNamedPipe, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT};
+    pub use windows::Win32::System::IO::{GetOverlappedResult, OVERLAPPED}; 
+    pub use windows::core::s;
+
+}
+#[cfg(target_os = "linux")]
+mod platform_imports {
+}
+
+use platform_imports::*;
+
+// WINDOWS IMPLEMENTATION
 
 #[cfg(target_os = "windows")]
 pub struct PipeController {
@@ -22,8 +34,24 @@ pub struct PipeController {
 
 #[cfg(target_os = "windows")]
 impl PipeController {
-    pub fn new(pipe_name: PCSTR) -> Self {
-        Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new(), pending_writes: Vec::new() }
+    pub fn new(pipe_index: usize) -> Self {
+
+        const pipe_names: [PCSTR; 12] = [
+            s!(r"\\.\pipe\SnakePipe1"),
+            s!(r"\\.\pipe\SnakePipe2"),
+            s!(r"\\.\pipe\SnakePipe3"),
+            s!(r"\\.\pipe\SnakePipe4"),
+            s!(r"\\.\pipe\SnakePipe5"),
+            s!(r"\\.\pipe\SnakePipe6"),
+            s!(r"\\.\pipe\SnakePipe7"),
+            s!(r"\\.\pipe\SnakePipe8"),
+            s!(r"\\.\pipe\SnakePipe9"),
+            s!(r"\\.\pipe\SnakePipe10"),
+            s!(r"\\.\pipe\SnakePipe11"),
+            s!(r"\\.\pipe\SnakePipe12"),
+        ];
+
+        Self { direction: Direction::RIGHT, pipe: None, pipe_name: pipe_names[pipe_index], ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new(), pending_writes: Vec::new() }
     }
 
     fn is_connected(&self) -> bool {
@@ -224,5 +252,46 @@ impl Debug for PipeController {
     }
 }
 
+#[cfg(target_os = "windows")]
+#[derive(Debug)]
+pub struct UnixSocketController {
+    direction: Direction,
+    ai_name: String,
+    missed_inputs: i32,
+    marked_cells: Vec<u16>,
+    socket_id: i32
+}
+
+#[cfg(target_os = "windows")]
+impl UnixSocketController {
+    pub fn new(socket_id: i32) -> Self {
+        Self { direction: Direction::RIGHT, socket_id, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new() }
+    }
+
+}
+
+#[cfg(target_os = "windows")]
+impl SnakeController for UnixSocketController {
+    fn report_data(&mut self, _data: SnakeData, _snake_id: i32) {}
+    fn send_winner(&mut self, winner: i32) {}
+    fn connect(&mut self) -> bool { true } // Only used for ai_controllers
+    fn disconnect(&self) {}
+    fn update(&mut self) {}
+
+    fn clone_weak(&self) -> Box<dyn SnakeController> {
+        Box::new(UnixSocketController { direction: self.direction, socket_id: self.socket_id, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new() })
+    }
+    fn get_info(&self) -> Option<PlayerInfo> { None } 
+
+    fn get_name(&self) -> String {
+        self.ai_name.clone()
+    }
+
+    fn next_direction(&self) -> Direction {
+        self.direction
+    }
+
+ 
+}
 
 

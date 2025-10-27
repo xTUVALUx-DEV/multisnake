@@ -1,6 +1,6 @@
 use macroquad::{prelude::*, ui::{hash, root_ui, widgets::{self, Group}}};
-use windows::core::{s, PCSTR};
-
+#[cfg(target_os = "linux")]
+use crate::base_snake::snake_controller::ai_controller::UnixSocketController;
 use crate::base_snake::{consts, snake::SnakeController, snake_controller::{ai_controller::PipeController, keyboard_controller::KeyboardController}};
 
 pub struct GameConfig {
@@ -52,20 +52,7 @@ pub async  fn add_players() -> GameConfig {
     let mut snake_controllers: Vec<Box<dyn SnakeController>> = Vec::new(); 
     let mut current_pipe_index = 0;
 
-    const pipe_names: [PCSTR; 12] = [
-        s!(r"\\.\pipe\SnakePipe1"),
-        s!(r"\\.\pipe\SnakePipe2"),
-        s!(r"\\.\pipe\SnakePipe3"),
-        s!(r"\\.\pipe\SnakePipe4"),
-        s!(r"\\.\pipe\SnakePipe5"),
-        s!(r"\\.\pipe\SnakePipe6"),
-        s!(r"\\.\pipe\SnakePipe7"),
-        s!(r"\\.\pipe\SnakePipe8"),
-        s!(r"\\.\pipe\SnakePipe9"),
-        s!(r"\\.\pipe\SnakePipe10"),
-        s!(r"\\.\pipe\SnakePipe11"),
-        s!(r"\\.\pipe\SnakePipe12"),
-    ];
+   
     
     let (mut grid_size_x, mut grid_size_y) = (consts::GRID_SIZE.0.to_string(), consts::GRID_SIZE.1.to_string());
     let mut sandbox = false;
@@ -86,7 +73,12 @@ pub async  fn add_players() -> GameConfig {
             println!("Added Player");
         }
         if is_key_pressed(KeyCode::O) {
-            snake_controllers.push(Box::new(PipeController::new(pipe_names[current_pipe_index])));
+            #[cfg(target_os = "windows")]
+            snake_controllers.push(Box::new(PipeController::new(current_pipe_index)));
+
+            #[cfg(target_os = "linux")]
+            snake_controllers.push(Box::new(UnixSocketController::new(current_pipe_index)));
+
             current_pipe_index += 1;
             println!("Added Ai");
         }
