@@ -1,7 +1,12 @@
 use macroquad::{prelude::*, ui::{hash, root_ui, widgets::{self, Group}}};
+
+use crate::base_snake::{consts, snake::SnakeController, snake_controller::{keyboard_controller::KeyboardController}};
+
 #[cfg(target_os = "linux")]
 use crate::base_snake::snake_controller::ai_controller::UnixSocketController;
-use crate::base_snake::{consts, snake::SnakeController, snake_controller::{ai_controller::PipeController, keyboard_controller::KeyboardController}};
+
+#[cfg(target_os = "windows")]
+use crate::base_snake::snake_controller::ai_controller::PipeController;
 
 pub struct GameConfig {
     pub snake_controller_list: Vec<Box<dyn SnakeController>>,
