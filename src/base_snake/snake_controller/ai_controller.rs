@@ -252,7 +252,7 @@ impl Debug for PipeController {
     }
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(target_os = "linux")]
 #[derive(Debug)]
 pub struct UnixSocketController {
     direction: Direction,
@@ -262,7 +262,7 @@ pub struct UnixSocketController {
     socket_id: i32
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(target_os = "linux")]
 impl UnixSocketController {
     pub fn new(socket_id: i32) -> Self {
         Self { direction: Direction::RIGHT, socket_id, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new() }
@@ -270,7 +270,7 @@ impl UnixSocketController {
 
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(target_os = "linux")]
 impl SnakeController for UnixSocketController {
     fn report_data(&mut self, _data: SnakeData, _snake_id: i32) {}
     fn send_winner(&mut self, winner: i32) {}
