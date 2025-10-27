@@ -274,7 +274,11 @@ impl UnixSocketController {
 impl SnakeController for UnixSocketController {
     fn report_data(&mut self, _data: SnakeData, _snake_id: i32) {}
     fn send_winner(&mut self, winner: i32) {}
-    fn connect(&mut self) -> bool { true } // Only used for ai_controllers
+    fn connect(&mut self) -> bool { 
+
+        true 
+
+    } // Only used for ai_controllers
     fn disconnect(&self) {}
     fn update(&mut self) {}
 
