@@ -8,6 +8,8 @@ use windows::Win32::System::Pipes::{ConnectNamedPipe, CreateNamedPipeA, PeekName
 use windows::Win32::System::IO::{GetOverlappedResult, OVERLAPPED};
 use crate::base_snake::snake::{Direction, PlayerInfo, SnakeController, SnakeData};
 
+
+#[cfg(target_os = "windows")]
 pub struct PipeController {
     pipe: Option<HANDLE>,
     pipe_name: PCSTR,
@@ -17,6 +19,8 @@ pub struct PipeController {
     marked_cells: Vec<u16>,
     pending_writes: Vec<(Arc<Vec<u8>>, OVERLAPPED)>,
 }
+
+#[cfg(target_os = "windows")]
 impl PipeController {
     pub fn new(pipe_name: PCSTR) -> Self {
         Self { direction: Direction::RIGHT, pipe: None, pipe_name, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new(), pending_writes: Vec::new() }
@@ -49,6 +53,7 @@ impl PipeController {
 
 }
 
+#[cfg(target_os = "windows")]
 impl SnakeController for PipeController {
     fn clone_weak(&self) -> Box<(dyn SnakeController)> {
         Box::new(PipeController { pipe: None, pipe_name: self.pipe_name, direction: self.direction, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new(), pending_writes: Vec::new() })
@@ -212,6 +217,7 @@ impl SnakeController for PipeController {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl Debug for PipeController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PipeController").field("pipe", &self.pipe).field("pipe_name", &self.pipe_name).field("direction", &self.direction).field("ai_name", &self.ai_name).field("missed_inputs", &self.missed_inputs).field("marked_cells", &self.marked_cells).finish()
