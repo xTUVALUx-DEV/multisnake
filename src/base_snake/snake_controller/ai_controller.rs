@@ -15,6 +15,8 @@ mod platform_imports {
 }
 #[cfg(target_os = "linux")]
 mod platform_imports {
+    pub use std::os::unix::net::{UnixListener, UnixStream};
+    pub use std::io::{Read, Write};
 }
 
 use platform_imports::*;
@@ -259,33 +261,135 @@ pub struct UnixSocketController {
     ai_name: String,
     missed_inputs: i32,
     marked_cells: Vec<u16>,
-    socket_id: i32
+    socket_id: i32,
+    stream: Option<UnixStream>,
+    listener: Option<UnixListener>
+
+
 }
 
 #[cfg(target_os = "linux")]
 impl UnixSocketController {
     pub fn new(socket_id: i32) -> Self {
-        Self { direction: Direction::RIGHT, socket_id, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new() }
+        Self { direction: Direction::RIGHT, socket_id, ai_name: "Unknown Ai".to_string(), missed_inputs: 0, marked_cells: Vec::new(), stream: None, listener: None }
     }
 
+    pub fn is_connected(&self) -> bool {
+        self.stream.is_some()
+    }
 }
 
 #[cfg(target_os = "linux")]
 impl SnakeController for UnixSocketController {
-    fn report_data(&mut self, _data: SnakeData, _snake_id: i32) {}
-    fn send_winner(&mut self, winner: i32) {}
+    fn report_data(&mut self, data: SnakeData, snake_id: i32) {
+        if !self.is_connected() {
+            return;
+        }
+
+        let buffer = Arc::new(data.encode(snake_id).to_vec());
+        self.stream.as_ref().unwrap().write_all(buffer.as_slice());
+    }
+    fn send_winner(&mut self, winner_id: i32) {
+        if !self.is_connected() {
+            return;
+        }
+
+        let mut buffer = Vec::from([2]); // PacketId + WinnerId
+        buffer.extend((winner_id as i32).to_le_bytes());
+
+        self.stream.as_ref().unwrap().write_all(buffer.as_slice());
+    }
+
     fn connect(&mut self) -> bool { 
+        let socket_path = format!("/tmp/multisnake{}.sock", self.socket_id+1);
+        std::fs::remove_file(&socket_path).ok();
 
-        true 
+        self.listener = UnixListener::bind(&socket_path).ok();
+        let (mut stream, _addr) = self.listener.as_ref().unwrap().accept().unwrap();
 
-    } // Only used for ai_controllers
+        self.stream = Some(stream);
+
+        println!(" {:?}", self.stream);
+
+        // Read Name
+        let mut buffer = [0u8; 216];
+
+        if let Some(stream) = &mut self.stream {
+
+            stream.set_nonblocking(false);
+            println!("Waiting");
+            let bytes_read = stream.read(&mut buffer).unwrap();
+            println!("Connection {}", bytes_read);
+
+            self.ai_name = String::from_utf8_lossy(&buffer[..bytes_read as usize]).to_string();
+            
+            stream.set_nonblocking(true);
+        }
+
+        true
+
+    } 
     fn disconnect(&self) {}
-    fn update(&mut self) {}
+    fn update(&mut self) {
+        if !self.is_connected() {
+            return;
+        }
+
+        let mut buffer = vec![0u8; 256];
+        match self.stream.as_ref().unwrap().read(&mut buffer) {
+            Ok(n) => {
+                while !buffer.is_empty() {
+                    let a = buffer.remove(0);
+                    println!("PacketId {}", a);
+                    match a {
+                        10 => { self.direction = Direction::UP; println!("UP")},
+                        11 => { self.direction = Direction::DOWN; println!("DOWN")},
+                        12 => { self.direction = Direction::LEFT; println!("LEFT")},
+                        13 => { self.direction = Direction::RIGHT; println!("RIGHT")},
+                        20 if buffer.len() >= 2 => {
+                            println!("InfoPacket");
+                            let bytes: Vec<u8> = buffer.drain(0..2).collect();
+                            let length = u16::from_le_bytes([bytes[0], bytes[1]]);
+                            println!("C {}", length);
+                            self.marked_cells = (0..length).map(|i| {
+                                let bytes: Vec<u8> = buffer.drain(0..2).collect();
+                                u16::from_le_bytes([bytes[0], bytes[1]])
+                            }).collect();
+                            //println!("A {:?}", self.marked_cells);
+                            
+                        }
+                        _ => println!("Invalid Message"),    
+                    }
+                    
+                    if *(buffer.first().unwrap_or(&0)) == 0 {
+                        break;
+                    }
+                }
+            }
+            Err (ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                return;
+            }
+            Err(e) => {
+                println!("Some error reading socket!");
+            }
+        }
+        println!(" B {:?}", buffer);
+
+    }
 
     fn clone_weak(&self) -> Box<dyn SnakeController> {
-        Box::new(UnixSocketController { direction: self.direction, socket_id: self.socket_id, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new() })
+        let mut newObj = UnixSocketController { direction: self.direction, socket_id: self.socket_id, ai_name: self.ai_name.clone(), missed_inputs: 0, marked_cells: Vec::new(), stream: None, listener: None };
+        Box::new(newObj)
     }
-    fn get_info(&self) -> Option<PlayerInfo> { None } 
+    fn get_info(&self) -> Option<PlayerInfo> {
+        Some(PlayerInfo {
+            marked_cells: self.marked_cells.clone(),
+            info_lines: vec![
+                format!("Missed Inputs: {}", self.missed_inputs),
+                format!("Current Direction: {}", self.direction.to_string())
+            ]
+        })
+    }
 
     fn get_name(&self) -> String {
         self.ai_name.clone()

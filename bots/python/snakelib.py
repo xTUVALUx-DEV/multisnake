@@ -1,11 +1,22 @@
 import enum
+import sys
 import os
 import time
 from turtle import right
-import win32file
 import struct
+import socket
+
+if os.name == 'nt':
+    import win32file
+
+class OsMode(enum.Enum):
+    WINDOWS = 0
+    LINUX = 1
+
+OSMODE = OsMode.LINUX
 
 PIPE_BASE_NAME = r'\\.\pipe\SnakePipe'
+SOCK_BASE_NAME = '/tmp/multisnake'
 
 class GameEnd(Exception):
     pass
@@ -148,31 +159,51 @@ class BaseSnakeAi:
         print("Waiting for game...")
         print(PIPE_BASE_NAME + self.player_slot)
         while True:
+            time.sleep(1)
             try:
-                self.pipe = win32file.CreateFile(
-                    PIPE_BASE_NAME + self.player_slot,
-                    win32file.GENERIC_READ | win32file.GENERIC_WRITE,
-                    0,
-                    None,
-                    win32file.OPEN_EXISTING,
-                    0,
-                    None
-                )
-                break
+                if OSMODE == OsMode.WINDOWS:
+                    self.pipe = win32file.CreateFile(
+                        PIPE_BASE_NAME + self.player_slot,
+                        win32file.GENERIC_READ | win32file.GENERIC_WRITE,
+                        0,
+                        None,
+                        win32file.OPEN_EXISTING,
+                        0,
+                        None
+                    )
+                    break
+                else:
+                    self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    self.sock.connect(SOCK_BASE_NAME + self.player_slot + ".sock")
+                    break
+            except KeyboardInterrupt:
+                sys.exit()
             except Exception as e:
                 time.sleep(1)
+                continue
 
         print(f"Connected as {self.name}")
 
-        win32file.WriteFile(self.pipe, self.name.encode())
+        if OSMODE == OsMode.WINDOWS:
+            win32file.WriteFile(self.pipe, self.name.encode())
+        else:
+            self.sock.sendall(self.name.encode())
+
         while True:
             try:
-                response = win32file.ReadFile(self.pipe, 64 * 1024)
+                if OSMODE == OsMode.WINDOWS:
+                    response = win32file.ReadFile(self.pipe, 64 * 1024)
+                else:
+                    response = (0, self.sock.recv(1024))
+                    print(response)
             except:
                 raise GameEnd
             
             if response[0] == 0:
                 buffer  = response[1]
+                if len(buffer) <= 0:
+                    break
+
                 if buffer[0] == 0:
                     try:
                         data = SnakeData(buffer[1:])
@@ -189,7 +220,10 @@ class BaseSnakeAi:
                             packet += self.current_markes_cells_packet
                             self.current_markes_cells_packet = None
 
-                        win32file.WriteFile(self.pipe, packet)
+                        if OSMODE == OsMode.WINDOWS:
+                            win32file.WriteFile(self.pipe, packet)
+                        else:
+                            self.sock.sendall(packet)
                     except Exception as e:
                         print(e)
                         raise GameEnd
